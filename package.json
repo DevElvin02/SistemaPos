@@ -12,8 +12,11 @@
     "dev:full": "concurrently -k \"npm run dev:api\" \"npm run dev:renderer\"",
     "dev:electron": "wait-on tcp:5173 && electron ./electron/main.mjs",
     "dev:desktop": "concurrently -k \"npm run dev:renderer\" \"npm run dev:electron\"",
-    "dev:all": "concurrently -k --names \"API,UI,ELEC\" -c \"green,blue,magenta\" \"npm run dev:api\" \"npm run dev:renderer\" \"npm run dev:electron\"",
+    "dev:all": "concurrently -k --names \"UI,ELEC\" -c \"blue,magenta\" \"npm run dev:renderer\" \"npm run dev:electron\"",
     "build": "tsc -b && vite build",
+    "build:desktop": "npm run build:renderer:electron && electron-builder",
+    "build:renderer:electron": "tsc -b && cross-env ELECTRON=true vite build",
+    "build:win": "npm run build:renderer:electron && electron-builder --win nsis",
     "preview": "vite preview",
     "lint": "eslint .",
     "start:desktop": "electron ./electron/main.mjs"
@@ -79,7 +82,9 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3",
     "electron": "^36.4.0",
+    "electron-builder": "^24.13.3",
     "postcss": "^8.5",
     "tailwindcss": "^4.2.0",
     "terser": "^5.46.1",
@@ -87,5 +92,30 @@
     "typescript": "5.7.3",
     "vite": "^5.0.8",
     "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.sublimart.desktop",
+    "productName": "Sublimart",
+    "directories": {
+      "output": "release-build"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "server/**",
+      ".env.example",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   }
 }
