@@ -21,6 +21,7 @@ export const dbPool = mysql.createPool({
   queueLimit: 0,
   decimalNumbers: true,
   timezone: 'Z',
+  ...(process.env.DB_SSL === 'true' ? { ssl: { rejectUnauthorized: true } } : {}),
 });
 
 export async function pingDatabase() {
