@@ -5,6 +5,11 @@ function hashPassword(password) {
   return createHash('sha256').update(String(password)).digest('hex');
 }
 
+function isPermissionError(error) {
+  const code = String(error?.code || '');
+  return code === 'ER_ACCESS_DENIED_ERROR' || code === 'ER_TABLEACCESS_DENIED_ERROR';
+}
+
 async function tableExists(tableName) {
   const [rows] = await dbPool.query(
     `SELECT COUNT(*) AS total
@@ -28,7 +33,15 @@ async function columnExists(tableName, columnName) {
 async function addColumnIfMissing(tableName, columnName, definition) {
   if (await columnExists(tableName, columnName)) return;
   const query = `ALTER TABLE ${tableName} ADD COLUMN ${definition}`;
-  await dbPool.query(query);
+  try {
+    await dbPool.query(query);
+  } catch (error) {
+    if (isPermissionError(error)) {
+      console.warn(`[DB bootstrap] Sin permisos para ALTER TABLE ${tableName}. Se omite migracion de columna ${columnName}.`);
+      return;
+    }
+    throw error;
+  }
 }
 
 async function fkExists(tableName, constraintName) {
@@ -44,7 +57,29 @@ async function fkExists(tableName, constraintName) {
 
 async function dropFkIfExists(tableName, constraintName) {
   if (!(await fkExists(tableName, constraintName))) return;
-  await dbPool.query(`ALTER TABLE ${tableName} DROP FOREIGN KEY ${constraintName}`);
+  try {
+    await dbPool.query(`ALTER TABLE ${tableName} DROP FOREIGN KEY ${constraintName}`);
+  } catch (error) {
+    if (isPermissionError(error)) {
+      console.warn(`[DB bootstrap] Sin permisos para quitar FK ${constraintName} en ${tableName}.`);
+      return;
+    }
+    throw error;
+  }
+}
+
+async function createTableIfMissing(tableName, createStatement) {
+  if (await tableExists(tableName)) return;
+  try {
+    await dbPool.query(createStatement);
+  } catch (error) {
+    if (isPermissionError(error)) {
+      throw new Error(
+        `Sin permisos para crear la tabla ${tableName}. Configura permisos de DB_USER sobre DB_NAME o crea la tabla manualmente.`
+      );
+    }
+    throw error;
+  }
 }
 
 async function dropAllFksReferencingUsers() {
@@ -65,7 +100,7 @@ async function dropAllFksReferencingUsers() {
 }
 
 export async function bootstrapSchema() {
-  await dbPool.query(
+  await createTableIfMissing('users',
     `CREATE TABLE IF NOT EXISTS users (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       email VARCHAR(150) NOT NULL UNIQUE,
@@ -87,7 +122,12 @@ export async function bootstrapSchema() {
   const hasRoleIdColumn = await columnExists('users', 'role_id');
   if (hasRoleIdColumn) {
     // Permite inserts sin role_id explícito desde el flujo nuevo.
-    await dbPool.query('ALTER TABLE users MODIFY role_id BIGINT UNSIGNED NULL');
+    try {
+      await dbPool.query('ALTER TABLE users MODIFY role_id BIGINT UNSIGNED NULL');
+    } catch (error) {
+      if (!isPermissionError(error)) throw error;
+      console.warn('[DB bootstrap] Sin permisos para modificar users.role_id. Se continua sin este ajuste.');
+    }
   }
 
   if (hasRoleIdColumn) {
@@ -102,7 +142,7 @@ export async function bootstrapSchema() {
     );
   }
 
-  await dbPool.query(
+  await createTableIfMissing('password_reset_tokens',
     `CREATE TABLE IF NOT EXISTS password_reset_tokens (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       user_id BIGINT UNSIGNED NOT NULL,
@@ -171,7 +211,7 @@ export async function bootstrapSchema() {
      WHERE (used_at IS NOT NULL) OR expires_at < NOW()`
   );
 
-  await dbPool.query(
+  await createTableIfMissing('system_settings',
     `CREATE TABLE IF NOT EXISTS system_settings (
       id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
       company_name VARCHAR(150) NOT NULL,
@@ -226,5 +266,10 @@ export async function bootstrapSchema() {
 
   // El front usa auth local, no usuarios persistidos en DB.
   // Evita errores de FK en tablas operativas que referencian users(id).
-  await dropAllFksReferencingUsers();
+  try {
+    await dropAllFksReferencingUsers();
+  } catch (error) {
+    if (!isPermissionError(error)) throw error;
+    console.warn('[DB bootstrap] Sin permisos para eliminar FKs hacia users. Se continua.');
+  }
 }
