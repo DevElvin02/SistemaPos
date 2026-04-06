@@ -81,9 +81,9 @@ router.post('/password-reset/request', async (req, res, next) => {
 
     await dbPool.query('DELETE FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL', [user.id]);
     await dbPool.query(
-      `INSERT INTO password_reset_tokens (user_id, token, token_hash, expires_at)
-       VALUES (?, ?, ?, ?)`,
-      [user.id, token, token, expiresAt]
+      `INSERT INTO password_reset_tokens (user_id, token, expires_at)
+       VALUES (?, ?, ?)`,
+      [user.id, token, expiresAt]
     );
 
     let delivery;
