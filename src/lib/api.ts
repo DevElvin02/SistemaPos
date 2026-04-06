@@ -1,5 +1,10 @@
-const API_URL = import.meta.env.VITE_API_URL
-  || (window.location.protocol === 'file:' ? 'http://localhost:4000/api' : `${window.location.origin}/api`);
+const ENV_API_URL = (import.meta.env.VITE_API_URL || '').trim();
+const isDesktopRuntime = window.location.protocol === 'file:';
+const envPointsToLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(ENV_API_URL);
+
+const API_URL = isDesktopRuntime
+  ? (ENV_API_URL || 'http://localhost:4000/api')
+  : (!ENV_API_URL || envPointsToLocalhost ? `${window.location.origin}/api` : ENV_API_URL);
 
 type ApiMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
