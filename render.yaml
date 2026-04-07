@@ -11,3 +11,31 @@ services:
         value: production
       - key: PORT
         value: 10000
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: 4000
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        value: sublimart
+      - key: DB_SSL
+        value: true
+      - key: DB_SSL_CA_PATH
+        value: ./certs/isrgrootx1.pem
+      - key: DB_SSL_REJECT_UNAUTHORIZED
+        value: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: CASHIER_DESKTOP_ONLY
+        value: true
+      - key: CASHIER_ALLOW_WEB_LOGIN
+        value: false
+      - key: CASHIER_ALLOWED_IPS
+        sync: false
+      - key: CASHIER_ALLOWED_ORIGINS
+        sync: false

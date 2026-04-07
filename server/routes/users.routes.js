@@ -8,12 +8,16 @@ function hashPassword(password) {
   return createHash('sha256').update(String(password)).digest('hex');
 }
 
+function normalizeRole(role) {
+  return String(role) === 'admin' ? 'admin' : 'cajero';
+}
+
 function mapUser(row) {
   return {
     id: String(row.id),
     email: row.email,
     name: row.name,
-    role: row.role,
+    role: normalizeRole(row.role),
     activo: Boolean(row.is_active),
     ultimoLogin: row.last_login_at,
   };
@@ -105,7 +109,7 @@ router.put('/:id', async (req, res, next) => {
     const nextRole = role === 'admin' ? 'admin' : 'cajero';
     const nextActive = activo ? 1 : 0;
 
-    if ((current.role === 'admin' && current.is_active === 1) && (nextRole !== 'admin' || nextActive !== 1)) {
+    if ((normalizeRole(current.role) === 'admin' && current.is_active === 1) && (nextRole !== 'admin' || nextActive !== 1)) {
       const activeAdmins = await getActiveAdminsCount();
       if (activeAdmins <= 1) {
         return res.status(400).json({ ok: false, message: 'No puedes desactivar o cambiar el último administrador activo' });
@@ -159,7 +163,7 @@ router.delete('/:id', async (req, res, next) => {
       return res.status(404).json({ ok: false, message: 'No se encontró el usuario a eliminar' });
     }
 
-    if (current.role === 'admin' && current.is_active === 1) {
+    if (normalizeRole(current.role) === 'admin' && current.is_active === 1) {
       const activeAdmins = await getActiveAdminsCount();
       if (activeAdmins <= 1) {
         return res.status(400).json({ ok: false, message: 'No puedes eliminar el último administrador activo' });

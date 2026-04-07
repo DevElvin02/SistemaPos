@@ -9,15 +9,111 @@ function hashPassword(password) {
   return createHash('sha256').update(String(password)).digest('hex');
 }
 
+function normalizeRole(role) {
+  return String(role) === 'admin' ? 'admin' : 'cajero';
+}
+
 function mapUser(row) {
   return {
     id: String(row.id),
     email: row.email,
     name: row.name,
-    role: row.role,
+    role: normalizeRole(row.role),
     activo: Boolean(row.is_active),
     ultimoLogin: row.last_login_at,
   };
+}
+
+function parseList(value) {
+  if (!value) return [];
+  return String(value)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseBoolean(value, fallback = false) {
+  if (value == null || value === '') return fallback;
+  return String(value).toLowerCase() === 'true';
+}
+
+function normalizeIp(ip) {
+  if (!ip) return '';
+  return String(ip).replace(/^::ffff:/, '');
+}
+
+function getRequestIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  const forwardedIp = Array.isArray(forwarded)
+    ? forwarded[0]
+    : String(forwarded || '').split(',')[0];
+
+  return normalizeIp(forwardedIp || req.ip || req.socket?.remoteAddress || '');
+}
+
+function isCashierLoginAllowed(req) {
+  const desktopOnly = parseBoolean(process.env.CASHIER_DESKTOP_ONLY, true);
+  const allowWebLogin = parseBoolean(process.env.CASHIER_ALLOW_WEB_LOGIN, false);
+  const allowedIps = parseList(process.env.CASHIER_ALLOWED_IPS);
+  const allowedOrigins = parseList(process.env.CASHIER_ALLOWED_ORIGINS);
+  const clientRuntime = String(req.headers['x-client-runtime'] || '').toLowerCase();
+  const requestIp = getRequestIp(req);
+  const requestOrigin = String(req.headers.origin || '');
+
+  if (!allowWebLogin && clientRuntime !== 'desktop') {
+    return {
+      allowed: false,
+      message: 'El usuario cajero solo puede iniciar sesion desde la app de escritorio autorizada.',
+    };
+  }
+
+  if (desktopOnly && clientRuntime !== 'desktop') {
+    return {
+      allowed: false,
+      message: 'El usuario cajero solo puede iniciar sesion desde la app de escritorio autorizada.',
+    };
+  }
+
+  if (allowedIps.length > 0 && !allowedIps.includes(requestIp)) {
+    return {
+      allowed: false,
+      message: 'El usuario cajero solo puede iniciar sesion desde la red autorizada del negocio.',
+    };
+  }
+
+  if (allowedOrigins.length > 0 && !allowedOrigins.includes(requestOrigin)) {
+    return {
+      allowed: false,
+      message: 'El usuario cajero solo puede iniciar sesion desde un origen autorizado.',
+    };
+  }
+
+  return { allowed: true, message: '' };
+}
+
+async function createPasswordResetToken(userId, token, expiresAt) {
+  try {
+    await dbPool.query(
+      `INSERT INTO password_reset_tokens (user_id, token, expires_at)
+       VALUES (?, ?, ?)`,
+      [userId, token, expiresAt]
+    );
+    return;
+  } catch (error) {
+    const code = String(error?.code || '');
+    const message = String(error?.message || '');
+    const tokenHashRequired = code === 'ER_NO_DEFAULT_FOR_FIELD' && /token_hash/i.test(message);
+
+    if (!tokenHashRequired) {
+      throw error;
+    }
+  }
+
+  await dbPool.query(
+    `INSERT INTO password_reset_tokens (user_id, token, token_hash, expires_at)
+     VALUES (?, ?, ?, ?)`,
+    [userId, token, token, expiresAt]
+  );
 }
 
 router.post('/login', async (req, res, next) => {
@@ -38,6 +134,22 @@ router.post('/login', async (req, res, next) => {
     const user = rows[0];
     if (!user || !user.is_active || user.password_hash !== hashPassword(password)) {
       return res.status(401).json({ ok: false, message: 'Email o contraseña incorrectos' });
+    }
+
+    if (normalizeRole(user.role) === 'cajero') {
+      const restriction = isCashierLoginAllowed(req);
+      console.info('[AUTH] cashier login attempt', {
+        email: String(email).trim().toLowerCase(),
+        role: normalizeRole(user.role),
+        runtime: String(req.headers['x-client-runtime'] || 'unknown').toLowerCase(),
+        ip: getRequestIp(req),
+        origin: String(req.headers.origin || ''),
+        allowed: restriction.allowed,
+      });
+
+      if (!restriction.allowed) {
+        return res.status(403).json({ ok: false, message: restriction.message });
+      }
     }
 
     await dbPool.query('UPDATE users SET last_login_at = NOW() WHERE id = ?', [user.id]);
@@ -80,11 +192,7 @@ router.post('/password-reset/request', async (req, res, next) => {
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
     await dbPool.query('DELETE FROM password_reset_tokens WHERE user_id = ? AND used_at IS NULL', [user.id]);
-    await dbPool.query(
-      `INSERT INTO password_reset_tokens (user_id, token, expires_at)
-       VALUES (?, ?, ?)`,
-      [user.id, token, expiresAt]
-    );
+    await createPasswordResetToken(user.id, token, expiresAt);
 
     let delivery;
     try {
