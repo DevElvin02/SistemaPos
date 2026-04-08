@@ -69,16 +69,12 @@ export async function deleteManagedUser(id: string): Promise<void> {
   await apiRequest<{ deleted: boolean }>(`/users/${id}`, { method: 'DELETE' });
 }
 
-export async function authenticateUser(email: string, password: string): Promise<User | null> {
-  try {
-    const data = await apiRequest<Record<string, unknown>>('/auth/login', {
-      method: 'POST',
-      body: { email, password },
-    });
-    return mapApiUser(data);
-  } catch {
-    return null;
-  }
+export async function authenticateUser(email: string, password: string): Promise<User> {
+  const data = await apiRequest<Record<string, unknown>>('/auth/login', {
+    method: 'POST',
+    body: { email, password },
+  });
+  return mapApiUser(data);
 }
 
 export async function requestPasswordResetForEmail(email: string): Promise<PasswordResetResponse> {
@@ -167,3 +163,7 @@ export function closeAllSessions(): void {
   localStorage.removeItem('auth_user');
   localStorage.setItem(FORCE_LOGOUT_KEY, String(Date.now()));
 }
+
+
+
+

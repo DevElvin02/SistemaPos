@@ -64,10 +64,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await new Promise(resolve => setTimeout(resolve, 800));
 
       const loggedUser = await authenticateUser(email, password);
-      if (!loggedUser) {
-        throw new Error('Email o contraseña incorrectos');
-      }
-
       setUser(loggedUser);
       sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(loggedUser));
     } finally {
@@ -122,3 +118,7 @@ export function useAuth(): AuthContextType {
   }
   return context;
 }
+
+
+
+
