@@ -134,15 +134,17 @@ router.post('/login', async (req, res, next) => {
     );
 
     const user = rows[0];
-    if (!user || !user.is_active || user.password_hash !== hashPassword(password)) {
+    if (!user || !user.is_active) {
       return res.status(401).json({ ok: false, message: 'Email o contraseña incorrectos' });
     }
 
-    if (normalizeRole(user.role) === 'cajero') {
+    const normalizedRole = normalizeRole(user.role);
+
+    if (normalizedRole === 'cajero') {
       const restriction = isCashierLoginAllowed(req);
       console.info('[AUTH] cashier login attempt', {
         email: String(email).trim().toLowerCase(),
-        role: normalizeRole(user.role),
+        role: normalizedRole,
         runtime: String(req.headers['x-client-runtime'] || 'unknown').toLowerCase(),
         ip: getRequestIp(req),
         origin: String(req.headers.origin || ''),
@@ -152,6 +154,10 @@ router.post('/login', async (req, res, next) => {
       if (!restriction.allowed) {
         return res.status(403).json({ ok: false, message: restriction.message });
       }
+    }
+
+    if (user.password_hash !== hashPassword(password)) {
+      return res.status(401).json({ ok: false, message: 'Email o contraseña incorrectos' });
     }
 
     await dbPool.query('UPDATE users SET last_login_at = NOW() WHERE id = ?', [user.id]);
