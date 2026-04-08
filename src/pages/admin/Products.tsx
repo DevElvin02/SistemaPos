@@ -4,13 +4,13 @@ import DataTable from '@/components/admin/DataTable';
 import StatusBadge from '@/components/admin/StatusBadge';
 import { GenericActionButtons } from '@/components/admin/GenericActionButtons';
 import { DeleteConfirmModal } from '@/components/admin/EntityModals';
+import { NumericInput } from '@/components/ui/numeric-input';
 import { Product } from '@/lib/data/products';
 import { InventoryItem } from '@/lib/data/inventory';
+import { API_URL, apiRequest } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { useAdmin } from '@/context/AdminContext';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
 function parseProductApiError(rawMessage: string): string {
   if (!rawMessage) return 'Error al guardar producto';
@@ -48,20 +48,20 @@ function inventoryStatus(quantity: number, minLevel: number, maxLevel: number): 
   return 'normal';
 }
 
-function apiRowToInventoryItem(row: Record<string, unknown>): InventoryItem {
+function inventoryApiRowToItem(row: Record<string, unknown>): InventoryItem {
   const quantity = Number(row.quantity ?? 0);
   const minLevel = Number(row.min_level ?? 0);
-  const maxLevel = Number(row.max_level ?? 0);
+  const maxLevel = Number(row.max_level ?? 999999);
 
   return {
-    id: String(row.id),
-    productId: String(row.id),
-    productName: String(row.name ?? ''),
+    id: String(row.product_id ?? row.id ?? ''),
+    productId: String(row.product_id ?? row.id ?? ''),
+    productName: String(row.product_name ?? row.name ?? ''),
     quantity,
     minLevel,
     maxLevel,
-    warehouseLocation: 'Sin ubicación',
-    lastRestocked: new Date(),
+    warehouseLocation: String(row.warehouse_location ?? 'Sin ubicación'),
+    lastRestocked: row.last_restocked_at ? new Date(String(row.last_restocked_at)) : new Date(),
     status: inventoryStatus(quantity, minLevel, maxLevel),
   };
 }
@@ -107,6 +107,11 @@ export default function Products() {
   const canCreate = hasPermission('products.create');
   const canEdit = hasPermission('products.edit');
   const canDelete = hasPermission('products.delete');
+
+  const refreshInventoryFromApi = async () => {
+    const rows = await apiRequest<Record<string, unknown>[]>('/inventory');
+    dispatch({ type: 'SET_INVENTORY', payload: rows.map(inventoryApiRowToItem) });
+  };
 
   useEffect(() => {
     fetch(`${API_URL}/products`)
@@ -220,11 +225,7 @@ export default function Products() {
         const json = await res.json();
         if (!res.ok) throw new Error(parseProductApiError(json.error || json.message || 'Error al guardar'));
         dispatch({ type: 'ADD_PRODUCT', payload: apiRowToProduct(json.data) });
-        const inventoryItem = apiRowToInventoryItem(json.data);
-        dispatch({
-          type: 'SET_INVENTORY',
-          payload: [inventoryItem, ...state.inventory.filter((item) => item.productId !== inventoryItem.productId)],
-        });
+        await refreshInventoryFromApi();
         toast.success('Producto agregado en la base de datos');
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Error de conexión con el servidor');
@@ -240,13 +241,7 @@ export default function Products() {
         const json = await res.json();
         if (!res.ok) throw new Error(parseProductApiError(json.error || json.message || 'Error al actualizar'));
         dispatch({ type: 'UPDATE_PRODUCT', payload: apiRowToProduct(json.data) });
-        const inventoryItem = apiRowToInventoryItem(json.data);
-        dispatch({
-          type: 'SET_INVENTORY',
-          payload: state.inventory.map((item) =>
-            item.productId === inventoryItem.productId ? { ...item, ...inventoryItem } : item
-          ),
-        });
+        await refreshInventoryFromApi();
         toast.success('Producto actualizado en la base de datos');
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Error de conexión con el servidor');
@@ -281,10 +276,7 @@ export default function Products() {
           throw new Error(json.error || json.message || 'Error al eliminar');
         }
         dispatch({ type: 'DELETE_PRODUCT', payload: selectedProduct.id });
-        dispatch({
-          type: 'SET_INVENTORY',
-          payload: state.inventory.filter((item) => item.productId !== selectedProduct.id),
-        });
+        await refreshInventoryFromApi();
         toast.success('Producto eliminado de la base de datos');
         setIsDeleteModalOpen(false);
       } catch (err) {
@@ -443,79 +435,140 @@ export default function Products() {
       <DataTable columns={columns} data={filteredProducts} />
 
       {isProductModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center" onClick={() => setIsProductModalOpen(false)}>
-          <div className="bg-card rounded-lg shadow-lg max-w-2xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground p-6 border-b flex items-center justify-between">
-              <h2 className="text-xl font-bold">{formMode === 'create' ? 'Nuevo Producto' : 'Editar Producto'}</h2>
-              <button onClick={() => setIsProductModalOpen(false)} className="text-primary-foreground hover:bg-primary/80 p-2 rounded transition">✕</button>
+        <div className="fixed inset-0 z-[120] bg-black/55 overflow-y-auto" onClick={() => setIsProductModalOpen(false)}>
+          <div className="min-h-full w-full flex items-start justify-center p-3 sm:p-6">
+            <div
+              className="bg-card rounded-2xl shadow-2xl border border-border/70 w-full max-w-4xl max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-3rem)] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+            <div className="sticky top-0 z-10 bg-gradient-to-r from-primary to-primary/90 text-primary-foreground px-5 pt-5 pb-4 border-b border-border/50 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold tracking-tight">{formMode === 'create' ? 'Nuevo Producto' : 'Editar Producto'}</h2>
+                <p className="text-sm text-primary-foreground/85">Completa la ficha del producto</p>
+              </div>
+              <button onClick={() => setIsProductModalOpen(false)} className="text-primary-foreground hover:bg-primary/70 p-2 rounded-xl transition">✕</button>
             </div>
 
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Nombre</label>
-                <input type="text" value={formData.name} onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))} className="w-full px-3 py-2 border border-border rounded-lg" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Categoria</label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
-                  className="w-full px-3 py-2 border border-border rounded-lg bg-background"
-                >
-                  <option value="">Seleccionar categoria...</option>
-                  {categoryOptions.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleSaveProduct();
+              }}
+              className="flex flex-col max-h-[calc(100vh-8.5rem)] sm:max-h-[calc(100vh-10rem)] min-h-0"
+            >
+              <div className="p-4 sm:p-5 overflow-y-auto min-h-0">
+                <div className="rounded-xl border border-border/70 bg-muted/20 p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold mb-1">Nombre</label>
+                      <input
+                        type="text"
+                        value={formData.name}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                        className="w-full px-3 py-2.5 border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold mb-1">Categoria</label>
+                      <select
+                        value={formData.category}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
+                        className="w-full px-3 py-2.5 border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">Seleccionar categoria...</option>
+                        {categoryOptions.map((category) => (
+                          <option key={category} value={category}>
+                            {category}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold mb-1">Precio de venta</label>
+                      <NumericInput
+                        placeholder="0.00"
+                        allowDecimals
+                        value={formData.price}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, price: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold mb-1">Costo</label>
+                      <NumericInput
+                        placeholder="0.00"
+                        allowDecimals
+                        value={formData.cost}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, cost: e.target.value }))}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold mb-1">Stock</label>
+                      <NumericInput
+                        placeholder="0"
+                        value={formData.stock}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, stock: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold mb-1">Stock minimo</label>
+                      <NumericInput
+                        placeholder="0"
+                        value={formData.minStock}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, minStock: e.target.value }))}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold mb-1">SKU</label>
+                      <input
+                        type="text"
+                        value={formData.sku}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, sku: e.target.value }))}
+                        className="w-full px-3 py-2.5 border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold mb-1">Codigo de barras</label>
+                      <input
+                        type="text"
+                        value={formData.barcode}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, barcode: e.target.value }))}
+                        className="w-full px-3 py-2.5 border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-semibold mb-1">Imagen (URL)</label>
+                      <input
+                        type="url"
+                        value={formData.image}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, image: e.target.value }))}
+                        className="w-full px-3 py-2.5 border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="https://..."
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-semibold mb-1">Estado</label>
+                      <select
+                        value={formData.status}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value as 'active' | 'inactive' }))}
+                        className="w-full px-3 py-2.5 border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="active">Activo</option>
+                        <option value="inactive">Inactivo</option>
+                      </select>
+                    </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Precio de venta</label>
-                <input type="number" step="0.01" value={formData.price} onChange={(e) => setFormData((prev) => ({ ...prev, price: e.target.value }))} className="w-full px-3 py-2 border border-border rounded-lg" />
+              <div className="bg-muted/50 border-t p-4 flex justify-end gap-3">
+                <button type="button" onClick={() => setIsProductModalOpen(false)} className="px-4 py-2 rounded-lg border border-border hover:bg-muted transition">Cancelar</button>
+                <button type="submit" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition">Guardar</button>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Costo</label>
-                <input type="number" step="0.01" value={formData.cost} onChange={(e) => setFormData((prev) => ({ ...prev, cost: e.target.value }))} className="w-full px-3 py-2 border border-border rounded-lg" />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Stock</label>
-                <input type="number" value={formData.stock} onChange={(e) => setFormData((prev) => ({ ...prev, stock: e.target.value }))} className="w-full px-3 py-2 border border-border rounded-lg" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Stock minimo</label>
-                <input type="number" value={formData.minStock} onChange={(e) => setFormData((prev) => ({ ...prev, minStock: e.target.value }))} className="w-full px-3 py-2 border border-border rounded-lg" />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">SKU</label>
-                <input type="text" value={formData.sku} onChange={(e) => setFormData((prev) => ({ ...prev, sku: e.target.value }))} className="w-full px-3 py-2 border border-border rounded-lg" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Codigo de barras</label>
-                <input type="text" value={formData.barcode} onChange={(e) => setFormData((prev) => ({ ...prev, barcode: e.target.value }))} className="w-full px-3 py-2 border border-border rounded-lg" />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1">Imagen (URL)</label>
-                <input type="url" value={formData.image} onChange={(e) => setFormData((prev) => ({ ...prev, image: e.target.value }))} className="w-full px-3 py-2 border border-border rounded-lg" placeholder="https://..." />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1">Estado</label>
-                <select value={formData.status} onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value as 'active' | 'inactive' }))} className="w-full px-3 py-2 border border-border rounded-lg bg-background">
-                  <option value="active">Activo</option>
-                  <option value="inactive">Inactivo</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="bg-muted/50 border-t p-4 flex justify-end gap-3">
-              <button onClick={() => setIsProductModalOpen(false)} className="px-4 py-2 rounded-lg border border-border hover:bg-muted transition">Cancelar</button>
-              <button onClick={handleSaveProduct} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition">Guardar</button>
-            </div>
+            </form>
+          </div>
           </div>
         </div>
       )}
