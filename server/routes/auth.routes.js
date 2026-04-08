@@ -9,6 +9,27 @@ const scryptAsync = promisify(scrypt);
 
 // Middleware de seguridad: detecta inyecciones SQL en todos los parámetros
 router.use((req, res, next) => {
+  const clientIp = getRequestIp(req);
+  
+  // PRIMERO: Chequea si la IP está bloqueada
+  const blacklistStatus = isIPBlacklisted(clientIp);
+  if (blacklistStatus.blocked) {
+    const remainingMs = blacklistStatus.unblockAt - Date.now();
+    const remainingMinutes = Math.ceil(remainingMs / (60 * 1000));
+    
+    console.warn('[SECURITY_BLOCKED]', {
+      action: 'REQUEST_BLOCKED_BLACKLISTED_IP',
+      ip: clientIp,
+      remainingMinutes,
+      timestamp: new Date().toISOString(),
+    });
+    
+    return res.status(403).json({
+      ok: false,
+      message: 'Acceso denegado. Intenta nuevamente más tarde.',
+    });
+  }
+  
   // Verifica query parameters
   for (const [key, value] of Object.entries(req.query || {})) {
     const threat = detectSQLInjectionAttempt(value, `query.${key}`);
@@ -56,8 +77,19 @@ const MAX_PASSWORD_LENGTH = 128;
 const LOGIN_WINDOW_MS = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || 10 * 60 * 1000);
 const LOGIN_MAX_ATTEMPTS = Number(process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS || 5);
 
+// Seguridad: configuración para bloqueo de IPs por intentos maliciosos
+const MALICIOUS_ATTEMPT_LIMIT = Number(process.env.MALICIOUS_ATTEMPT_LIMIT || 5);
+const MALICIOUS_ATTEMPT_WINDOW_MS = Number(process.env.MALICIOUS_ATTEMPT_WINDOW_MS || 60 * 60 * 1000); // 1 hora
+const IP_BLOCK_DURATION_MS = Number(process.env.IP_BLOCK_DURATION_MS || 24 * 60 * 60 * 1000); // 24 horas
+
 // Seguridad: limitador simple en memoria para frenar intentos de fuerza bruta.
 const loginAttempts = new Map();
+
+// Seguridad: Blacklist de IPs. Map: ip -> { blockedAt, unblockAt }
+const ipBlacklist = new Map();
+
+// Seguridad: Contador de intentos maliciosos por IP. Map: ip -> { count, firstAttemptAt }
+const maliciousAttempts = new Map();
 
 function logSecurityError(scope, error) {
   // Seguridad: nunca exponer detalles internos/SQL al cliente.
@@ -122,7 +154,105 @@ function logSecurityThreat(req, threatType, details) {
     userAgent,
     ...details,
   });
+  
+  // Registra el intento malicioso para posible bloqueo
+  registerMaliciousAttempt(ip);
 }
+
+function isIPBlacklisted(ip) {
+  // Seguridad: verifica si la IP está bloqueada
+  if (!ipBlacklist.has(ip)) {
+    return { blocked: false, unblockAt: null };
+  }
+  
+  const record = ipBlacklist.get(ip);
+  const now = Date.now();
+  
+  // Si ya pasó el tiempo de bloqueo, elimina de la blacklist
+  if (now > record.unblockAt) {
+    ipBlacklist.delete(ip);
+    return { blocked: false, unblockAt: null };
+  }
+  
+  return { blocked: true, unblockAt: record.unblockAt };
+}
+
+function registerMaliciousAttempt(ip) {
+  // Seguridad: registra un intento malicioso y decide si bloquear la IP
+  const now = Date.now();
+  const record = maliciousAttempts.get(ip);
+  
+  if (!record || now - record.firstAttemptAt > MALICIOUS_ATTEMPT_WINDOW_MS) {
+    // Nueva ventana de intentos
+    maliciousAttempts.set(ip, { count: 1, firstAttemptAt: now });
+    return;
+  }
+  
+  // Incrementa contador
+  const newCount = record.count + 1;
+  maliciousAttempts.set(ip, {
+    count: newCount,
+    firstAttemptAt: record.firstAttemptAt,
+  });
+  
+  // Si alcanza el límite, bloquea la IP
+  if (newCount >= MALICIOUS_ATTEMPT_LIMIT) {
+    const unblockAt = now + IP_BLOCK_DURATION_MS;
+    ipBlacklist.set(ip, { blockedAt: now, unblockAt });
+    
+    console.warn('[SECURITY_BLACKLIST]', {
+      action: 'IP_BLOCKED',
+      ip,
+      reason: `Excedió ${MALICIOUS_ATTEMPT_LIMIT} intentos maliciosos`,
+      blockedAt: new Date(now).toISOString(),
+      unblockAt: new Date(unblockAt).toISOString(),
+      blockDurationHours: IP_BLOCK_DURATION_MS / (60 * 60 * 1000),
+    });
+  }
+}
+
+function clearMaliciousAttempts(ip) {
+  // Limpia el contador de intentos maliciosos (se usa cuando hay login exitoso)
+  maliciousAttempts.delete(ip);
+}
+
+function getBlacklistStatus() {
+  // Retorna el estado actual del blacklist
+  const now = Date.now();
+  const activeBlocks = Array.from(ipBlacklist.entries())
+    .filter(([_, record]) => now < record.unblockAt)
+    .map(([ip, record]) => ({
+      ip,
+      blockedAt: new Date(record.blockedAt).toISOString(),
+      unblockAt: new Date(record.unblockAt).toISOString(),
+      remainingMinutes: Math.ceil((record.unblockAt - now) / (60 * 1000)),
+    }));
+  
+  return {
+    activeBlocks: activeBlocks.length,
+    totalAttempts: maliciousAttempts.size,
+    details: activeBlocks,
+  };
+}
+
+function removeIPFromBlacklist(ip) {
+  // Permite desbloquear una IP manualmente (para admin)
+  if (ipBlacklist.has(ip)) {
+    ipBlacklist.delete(ip);
+    maliciousAttempts.delete(ip);
+    
+    console.warn('[SECURITY_BLACKLIST]', {
+      action: 'IP_UNBLOCKED_MANUAL',
+      ip,
+      unblockAt: new Date().toISOString(),
+    });
+    
+    return { success: true };
+  }
+  
+  return { success: false, message: 'IP no está bloqueada' };
+}
+
 
 function hashPasswordLegacy(password) {
   return createHash('sha256').update(String(password)).digest('hex');
@@ -438,6 +568,7 @@ router.post('/login', async (req, res, next) => {
     }
 
     clearAttempts(throttleKey);
+    clearMaliciousAttempts(getRequestIp(req));
 
     await dbPool.query('UPDATE users SET last_login_at = NOW() WHERE id = ?', [user.id]);
 
@@ -655,6 +786,72 @@ router.post('/validate-session', async (req, res, next) => {
     return res.json({ ok: true, data: { sessionValid: true } });
   } catch (error) {
     logSecurityError('validate-session', error);
+    return res.status(500).json({ ok: false, message: GENERIC_SERVER_ERROR });
+  }
+});
+
+// ===== Endpoints de Administración de Seguridad =====
+// NOTA: Estos endpoints DEBEN estar protegidos por autenticación admin en tu middleware de aplicación
+
+router.get('/security/blacklist/status', async (req, res, next) => {
+  try {
+    // Nota: En producción, agregar verificación de que el usuario es admin
+    // if (!req.user || req.user.role !== 'admin') {
+    //   return res.status(403).json({ ok: false, message: 'Acceso denegado' });
+    // }
+    
+    const status = getBlacklistStatus();
+    
+    return res.json({
+      ok: true,
+      data: {
+        timestamp: new Date().toISOString(),
+        configuration: {
+          maliciousAttemptLimit: MALICIOUS_ATTEMPT_LIMIT,
+          maliciousAttemptWindowMinutes: MALICIOUS_ATTEMPT_WINDOW_MS / (60 * 1000),
+          ipBlockDurationHours: IP_BLOCK_DURATION_MS / (60 * 60 * 1000),
+        },
+        status,
+      },
+    });
+  } catch (error) {
+    logSecurityError('security-blacklist-status', error);
+    return res.status(500).json({ ok: false, message: GENERIC_SERVER_ERROR });
+  }
+});
+
+router.delete('/security/blacklist/:ip', async (req, res, next) => {
+  try {
+    // Nota: En producción, agregar verificación de que el usuario es admin
+    // if (!req.user || req.user.role !== 'admin') {
+    //   return res.status(403).json({ ok: false, message: 'Acceso denegado' });
+    // }
+    
+    const { ip } = req.params;
+    
+    // Validación básica de IP
+    if (!ip || typeof ip !== 'string' || ip.length > 45) {
+      return res.status(400).json({ ok: false, message: 'IP inválida' });
+    }
+    
+    const result = removeIPFromBlacklist(ip);
+    
+    if (result.success) {
+      return res.json({
+        ok: true,
+        data: {
+          message: `IP ${ip} desbloqueada exitosamente`,
+          unblockAt: new Date().toISOString(),
+        },
+      });
+    } else {
+      return res.status(404).json({
+        ok: false,
+        message: result.message || 'IP no encontrada en la blacklist',
+      });
+    }
+  } catch (error) {
+    logSecurityError('security-blacklist-remove', error);
     return res.status(500).json({ ok: false, message: GENERIC_SERVER_ERROR });
   }
 });
