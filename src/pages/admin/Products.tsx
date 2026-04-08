@@ -98,6 +98,8 @@ export default function Products() {
   const { state, dispatch } = useAdmin();
   const { hasPermission, user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedStockFilter, setSelectedStockFilter] = useState('all');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [formMode, setFormMode] = useState<ProductFormMode>('create');
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -126,14 +128,36 @@ export default function Products() {
 
   const filteredProducts = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    return state.products.filter(
-      (product) =>
+    return state.products.filter((product) => {
+      const matchesSearch =
         product.name.toLowerCase().includes(term) ||
         product.sku.toLowerCase().includes(term) ||
         product.category.toLowerCase().includes(term) ||
-        (product.barcode ?? '').toLowerCase().includes(term)
-    );
-  }, [state.products, searchTerm]);
+        (product.barcode ?? '').toLowerCase().includes(term);
+
+      const matchesCategory =
+        selectedCategory === 'all' ||
+        product.category.toLowerCase() === selectedCategory.toLowerCase();
+
+      const matchesStock =
+        selectedStockFilter === 'all' ||
+        (selectedStockFilter === 'in-stock' && product.stock > product.minStock) ||
+        (selectedStockFilter === 'low-stock' && product.stock > 0 && product.stock <= product.minStock) ||
+        (selectedStockFilter === 'out-of-stock' && product.stock <= 0);
+
+      return matchesSearch && matchesCategory && matchesStock;
+    });
+  }, [state.products, searchTerm, selectedCategory, selectedStockFilter]);
+
+  const productCategoryOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        state.products
+          .map((product) => String(product.category || '').trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  }, [state.products]);
 
   const categoryOptions = useMemo(() => {
     return state.categories
@@ -419,11 +443,39 @@ export default function Products() {
 
       <div className="mb-6 rounded-lg border border-border bg-card p-4">
         <div className="flex flex-col gap-4 sm:flex-row">
+          <div className="sm:w-56">
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="all">Todas las categorias</option>
+              {productCategoryOptions.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="sm:w-56">
+            <select
+              value={selectedStockFilter}
+              onChange={(e) => setSelectedStockFilter(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="all">Todo el stock</option>
+              <option value="in-stock">Con stock</option>
+              <option value="low-stock">Stock bajo</option>
+              <option value="out-of-stock">Sin stock</option>
+            </select>
+          </div>
+
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Buscar por nombre, SKU o categoría..."
+              placeholder="Buscar producto..."
               value={searchTerm}
               onChange={handleSearch}
               className="pl-10 w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
