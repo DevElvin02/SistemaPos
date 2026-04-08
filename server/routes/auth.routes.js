@@ -39,7 +39,9 @@ function parseBoolean(value, fallback = false) {
 
 function normalizeIp(ip) {
   if (!ip) return '';
-  return String(ip).replace(/^::ffff:/, '');
+  const normalized = String(ip).trim().replace(/^::ffff:/, '');
+  if (normalized === '::1') return '127.0.0.1';
+  return normalized;
 }
 
 function getRequestIp(req) {
