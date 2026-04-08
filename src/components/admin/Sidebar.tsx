@@ -155,8 +155,12 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="flex items-center px-5 py-5 border-b border-sidebar-border/70">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-sidebar-primary flex items-center justify-center font-bold text-lg text-sidebar-primary-foreground shadow-sm">
-            S
+          <div className="w-10 h-10 overflow-hidden rounded-xl bg-black/20 shadow-sm ring-1 ring-white/10">
+            <img
+              src="/favicon.ico"
+              alt="Icono de Motorepuestos"
+              className="h-full w-full object-cover"
+            />
           </div>
           <div>
             <h1 className="font-bold text-lg tracking-tight">Motorepuestos</h1>

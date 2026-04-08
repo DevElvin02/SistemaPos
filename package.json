@@ -94,8 +94,8 @@
     "wait-on": "^8.0.3"
   },
   "build": {
-    "appId": "com.sublimart.desktop",
-    "productName": "Sublimart",
+    "appId": "com.motorepuestos.desktop",
+    "productName": "Motorepuestos",
     "directories": {
       "output": "release-build"
     },
@@ -107,6 +107,7 @@
       "package.json"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis"
       ]
