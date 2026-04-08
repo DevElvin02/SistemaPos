@@ -65,28 +65,28 @@ function isCashierLoginAllowed(req) {
   if (!allowWebLogin && clientRuntime !== 'desktop') {
     return {
       allowed: false,
-      message: 'El usuario cajero solo puede iniciar sesion desde la app de escritorio autorizada.',
+      message: 'Esta cuenta no tiene permiso de acceso desde la web. Usa la aplicacion de escritorio Sublimart.',
     };
   }
 
   if (desktopOnly && clientRuntime !== 'desktop') {
     return {
       allowed: false,
-      message: 'El usuario cajero solo puede iniciar sesion desde la app de escritorio autorizada.',
+      message: 'Esta cuenta no tiene permiso de acceso desde la web. Usa la aplicacion de escritorio Sublimart.',
     };
   }
 
   if (allowedIps.length > 0 && !allowedIps.includes(requestIp)) {
     return {
       allowed: false,
-      message: 'El usuario cajero solo puede iniciar sesion desde la red autorizada del negocio.',
+      message: 'Acceso denegado. Solo puedes iniciar sesion desde la red autorizada del negocio.',
     };
   }
 
   if (allowedOrigins.length > 0 && !allowedOrigins.includes(requestOrigin)) {
     return {
       allowed: false,
-      message: 'El usuario cajero solo puede iniciar sesion desde un origen autorizado.',
+      message: 'Acceso denegado. Solo puedes iniciar sesion desde la red autorizada del negocio.',
     };
   }
 
