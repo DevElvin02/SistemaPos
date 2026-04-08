@@ -1,12 +1,146 @@
 import { Router } from 'express';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
 import { dbPool } from '../db/pool.js';
 import { buildPasswordResetLink, emailDeliveryConfigured, sendPasswordResetEmail } from '../lib/mailer.js';
 
 const router = Router();
+const scryptAsync = promisify(scrypt);
+const GENERIC_AUTH_ERROR = 'Credenciales inválidas';
+const GENERIC_SERVER_ERROR = 'No se pudo procesar la solicitud';
+const MIN_PASSWORD_LENGTH = 6;
+const MAX_EMAIL_LENGTH = 254;
+const MAX_PASSWORD_LENGTH = 128;
+const LOGIN_WINDOW_MS = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || 10 * 60 * 1000);
+const LOGIN_MAX_ATTEMPTS = Number(process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS || 5);
 
-function hashPassword(password) {
+// Seguridad: limitador simple en memoria para frenar intentos de fuerza bruta.
+const loginAttempts = new Map();
+
+function logSecurityError(scope, error) {
+  // Seguridad: nunca exponer detalles internos/SQL al cliente.
+  const message = error instanceof Error ? error.message : String(error || 'Unknown error');
+  console.error(`[AUTH][${scope}]`, message);
+}
+
+function hashPasswordLegacy(password) {
   return createHash('sha256').update(String(password)).digest('hex');
+}
+
+async function hashPasswordSecure(password) {
+  // Seguridad: hash robusto con salt unico por usuario (scrypt) en vez de SHA-256 plano.
+  const salt = randomBytes(16).toString('hex');
+  const derivedKey = await scryptAsync(String(password), salt, 64);
+  return `scrypt$${salt}$${Buffer.from(derivedKey).toString('hex')}`;
+}
+
+async function verifyPassword(storedHash, candidatePassword) {
+  const stored = String(storedHash || '');
+  const password = String(candidatePassword || '');
+
+  if (!stored) return { valid: false, needsRehash: false };
+
+  if (stored.startsWith('scrypt$')) {
+    const parts = stored.split('$');
+    if (parts.length !== 3) return { valid: false, needsRehash: false };
+
+    const [, salt, hashHex] = parts;
+    if (!salt || !hashHex) return { valid: false, needsRehash: false };
+
+    const expected = Buffer.from(hashHex, 'hex');
+    const actual = Buffer.from(await scryptAsync(password, salt, 64));
+
+    if (expected.length !== actual.length) {
+      return { valid: false, needsRehash: false };
+    }
+
+    return {
+      valid: timingSafeEqual(expected, actual),
+      needsRehash: false,
+    };
+  }
+
+  // Seguridad: compatibilidad temporal para migrar contraseñas antiguas (SHA-256 o texto plano)
+  // al nuevo esquema seguro sin cortar acceso de usuarios existentes.
+  const legacyMatch = stored === hashPasswordLegacy(password);
+  const plainTextMatch = stored === password;
+
+  if (legacyMatch || plainTextMatch) {
+    return { valid: true, needsRehash: true };
+  }
+
+  return { valid: false, needsRehash: false };
+}
+
+function sanitizeEmail(value) {
+  if (typeof value !== 'string') return null;
+  const cleaned = value.trim().toLowerCase();
+  if (!cleaned || cleaned.length > MAX_EMAIL_LENGTH) return null;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(cleaned)) return null;
+  return cleaned;
+}
+
+function sanitizePassword(value) {
+  if (typeof value !== 'string') return null;
+  const cleaned = value.trim();
+  if (!cleaned) return null;
+  if (cleaned.length < MIN_PASSWORD_LENGTH || cleaned.length > MAX_PASSWORD_LENGTH) return null;
+  return cleaned;
+}
+
+function sanitizeToken(value) {
+  if (typeof value !== 'string') return null;
+  const cleaned = value.trim();
+  if (!cleaned || cleaned.length > 128) return null;
+  return cleaned;
+}
+
+function getThrottleKey(req, email) {
+  return `${getRequestIp(req)}|${String(email || 'unknown')}`;
+}
+
+function getThrottleState(key) {
+  const now = Date.now();
+  const record = loginAttempts.get(key);
+
+  if (!record) {
+    return { blocked: false, retryAfterSeconds: 0 };
+  }
+
+  if (now - record.firstAttemptAt > LOGIN_WINDOW_MS) {
+    loginAttempts.delete(key);
+    return { blocked: false, retryAfterSeconds: 0 };
+  }
+
+  if (record.count >= LOGIN_MAX_ATTEMPTS) {
+    const retryAfterMs = Math.max(0, LOGIN_WINDOW_MS - (now - record.firstAttemptAt));
+    return {
+      blocked: true,
+      retryAfterSeconds: Math.ceil(retryAfterMs / 1000),
+    };
+  }
+
+  return { blocked: false, retryAfterSeconds: 0 };
+}
+
+function registerFailedAttempt(key) {
+  const now = Date.now();
+  const record = loginAttempts.get(key);
+
+  if (!record || now - record.firstAttemptAt > LOGIN_WINDOW_MS) {
+    loginAttempts.set(key, { count: 1, firstAttemptAt: now });
+    return;
+  }
+
+  loginAttempts.set(key, {
+    count: record.count + 1,
+    firstAttemptAt: record.firstAttemptAt,
+  });
+}
+
+function clearAttempts(key) {
+  loginAttempts.delete(key);
 }
 
 function normalizeRole(role) {
@@ -65,14 +199,14 @@ function isCashierLoginAllowed(req) {
   if (!allowWebLogin && clientRuntime !== 'desktop') {
     return {
       allowed: false,
-      message: 'Esta cuenta no tiene permiso de acceso desde la web. Usa la aplicacion de escritorio Sublimart.',
+      message: 'Esta cuenta no tiene permiso de acceso desde la web. Usa la aplicacion de escritorio de Motorepuestos La Bendición.',
     };
   }
 
   if (desktopOnly && clientRuntime !== 'desktop') {
     return {
       allowed: false,
-      message: 'Esta cuenta no tiene permiso de acceso desde la web. Usa la aplicacion de escritorio Sublimart.',
+      message: 'Esta cuenta no tiene permiso de acceso desde la web. Usa la aplicacion de escritorio de Motorepuestos La Bendición.',
     };
   }
 
@@ -121,8 +255,22 @@ async function createPasswordResetToken(userId, token, expiresAt) {
 router.post('/login', async (req, res, next) => {
   try {
     const { email, password } = req.body || {};
-    if (!email || !password) {
-      return res.status(400).json({ ok: false, message: 'Email y contraseña son obligatorios' });
+    const safeEmail = sanitizeEmail(email);
+    const safePassword = sanitizePassword(password);
+    const throttleKey = getThrottleKey(req, safeEmail || 'invalid');
+    const throttleState = getThrottleState(throttleKey);
+
+    if (throttleState.blocked) {
+      return res.status(429).json({
+        ok: false,
+        message: 'Demasiados intentos. Intenta nuevamente en unos minutos.',
+        retryAfterSeconds: throttleState.retryAfterSeconds,
+      });
+    }
+
+    if (!safeEmail || !safePassword) {
+      registerFailedAttempt(throttleKey);
+      return res.status(401).json({ ok: false, message: GENERIC_AUTH_ERROR });
     }
 
     const [rows] = await dbPool.query(
@@ -130,12 +278,13 @@ router.post('/login', async (req, res, next) => {
        FROM users
        WHERE LOWER(email) = LOWER(?)
        LIMIT 1`,
-      [String(email).trim()]
+      [safeEmail]
     );
 
     const user = rows[0];
     if (!user || !user.is_active) {
-      return res.status(401).json({ ok: false, message: 'Email o contraseña incorrectos' });
+      registerFailedAttempt(throttleKey);
+      return res.status(401).json({ ok: false, message: GENERIC_AUTH_ERROR });
     }
 
     const normalizedRole = normalizeRole(user.role);
@@ -143,7 +292,7 @@ router.post('/login', async (req, res, next) => {
     if (normalizedRole === 'cajero') {
       const restriction = isCashierLoginAllowed(req);
       console.info('[AUTH] cashier login attempt', {
-        email: String(email).trim().toLowerCase(),
+        email: safeEmail,
         role: normalizedRole,
         runtime: String(req.headers['x-client-runtime'] || 'unknown').toLowerCase(),
         ip: getRequestIp(req),
@@ -156,9 +305,18 @@ router.post('/login', async (req, res, next) => {
       }
     }
 
-    if (user.password_hash !== hashPassword(password)) {
-      return res.status(401).json({ ok: false, message: 'Email o contraseña incorrectos' });
+    const passwordCheck = await verifyPassword(user.password_hash, safePassword);
+    if (!passwordCheck.valid) {
+      registerFailedAttempt(throttleKey);
+      return res.status(401).json({ ok: false, message: GENERIC_AUTH_ERROR });
     }
+
+    if (passwordCheck.needsRehash) {
+      const upgradedHash = await hashPasswordSecure(safePassword);
+      await dbPool.query('UPDATE users SET password_hash = ? WHERE id = ?', [upgradedHash, user.id]);
+    }
+
+    clearAttempts(throttleKey);
 
     await dbPool.query('UPDATE users SET last_login_at = NOW() WHERE id = ?', [user.id]);
 
@@ -172,14 +330,16 @@ router.post('/login', async (req, res, next) => {
 
     return res.json({ ok: true, data: mapUser(freshRows[0]) });
   } catch (error) {
-    return next(error);
+    logSecurityError('login', error);
+    return res.status(500).json({ ok: false, message: GENERIC_SERVER_ERROR });
   }
 });
 
 router.post('/password-reset/request', async (req, res, next) => {
   try {
     const { email } = req.body || {};
-    if (!email) {
+    const safeEmail = sanitizeEmail(email);
+    if (!safeEmail) {
       return res.status(400).json({ ok: false, message: 'Email es obligatorio' });
     }
 
@@ -188,7 +348,7 @@ router.post('/password-reset/request', async (req, res, next) => {
        FROM users
        WHERE LOWER(email) = LOWER(?)
        LIMIT 1`,
-      [String(email).trim()]
+      [safeEmail]
     );
 
     const user = rows[0];
@@ -236,14 +396,16 @@ router.post('/password-reset/request', async (req, res, next) => {
       },
     });
   } catch (error) {
-    return next(error);
+    logSecurityError('password-reset-request', error);
+    return res.status(500).json({ ok: false, message: GENERIC_SERVER_ERROR });
   }
 });
 
 router.post('/password-reset/validate', async (req, res, next) => {
   try {
     const { token } = req.body || {};
-    if (!token) {
+    const safeToken = sanitizeToken(token);
+    if (!safeToken) {
       return res.json({ ok: true, data: { valid: false } });
     }
 
@@ -253,7 +415,7 @@ router.post('/password-reset/validate', async (req, res, next) => {
        INNER JOIN users u ON u.id = t.user_id
        WHERE t.token = ? AND t.used_at IS NULL AND t.expires_at > NOW()
        LIMIT 1`,
-      [token]
+      [safeToken]
     );
 
     const match = rows[0];
@@ -263,19 +425,19 @@ router.post('/password-reset/validate', async (req, res, next) => {
 
     return res.json({ ok: true, data: { valid: true, email: match.email } });
   } catch (error) {
-    return next(error);
+    logSecurityError('password-reset-validate', error);
+    return res.status(500).json({ ok: false, message: GENERIC_SERVER_ERROR });
   }
 });
 
 router.post('/password-reset/confirm', async (req, res, next) => {
   try {
     const { token, newPassword } = req.body || {};
-    if (!token || !newPassword) {
-      return res.status(400).json({ ok: false, message: 'token y newPassword son obligatorios' });
-    }
+    const safeToken = sanitizeToken(token);
+    const safePassword = sanitizePassword(newPassword);
 
-    if (String(newPassword).trim().length < 6) {
-      return res.status(400).json({ ok: false, message: 'La contraseña debe tener al menos 6 caracteres' });
+    if (!safeToken || !safePassword) {
+      return res.status(400).json({ ok: false, message: 'token y newPassword son obligatorios' });
     }
 
     const [rows] = await dbPool.query(
@@ -283,7 +445,7 @@ router.post('/password-reset/confirm', async (req, res, next) => {
        FROM password_reset_tokens
        WHERE token = ? AND used_at IS NULL AND expires_at > NOW()
        LIMIT 1`,
-      [token]
+      [safeToken]
     );
 
     const tokenRow = rows[0];
@@ -291,12 +453,14 @@ router.post('/password-reset/confirm', async (req, res, next) => {
       return res.status(400).json({ ok: false, message: 'El enlace de recuperación no es válido o ya expiró' });
     }
 
-    await dbPool.query('UPDATE users SET password_hash = ? WHERE id = ?', [hashPassword(newPassword), tokenRow.user_id]);
+    const secureHash = await hashPasswordSecure(safePassword);
+    await dbPool.query('UPDATE users SET password_hash = ? WHERE id = ?', [secureHash, tokenRow.user_id]);
     await dbPool.query('UPDATE password_reset_tokens SET used_at = NOW() WHERE id = ?', [tokenRow.id]);
 
     return res.json({ ok: true, data: { updated: true } });
   } catch (error) {
-    return next(error);
+    logSecurityError('password-reset-confirm', error);
+    return res.status(500).json({ ok: false, message: GENERIC_SERVER_ERROR });
   }
 });
 
