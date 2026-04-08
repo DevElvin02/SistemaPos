@@ -1,9 +1,4 @@
 import { dbPool } from './pool.js';
-import { createHash } from 'node:crypto';
-
-function hashPassword(password) {
-  return createHash('sha256').update(String(password)).digest('hex');
-}
 
 function isPermissionError(error) {
   const code = String(error?.code || '');
@@ -176,39 +171,12 @@ export async function bootstrapSchema() {
     }
   }
 
-  const [adminRows] = await dbPool.query('SELECT id FROM users WHERE email = ? LIMIT 1', ['admin@example.com']);
-  if (!adminRows.length) {
-    if (hasRoleIdColumn && (await tableExists('roles'))) {
-      await dbPool.query(
-        `INSERT INTO users (role_id, email, name, role, is_active, password_hash)
-         VALUES ((SELECT id FROM roles WHERE name = 'admin' LIMIT 1), ?, ?, 'admin', 1, ?)`,
-        ['admin@example.com', 'Admin', hashPassword('admin123')]
-      );
-    } else {
-      await dbPool.query(
-        `INSERT INTO users (email, name, role, is_active, password_hash)
-         VALUES (?, ?, 'admin', 1, ?)`,
-        ['admin@example.com', 'Admin', hashPassword('admin123')]
-      );
-    }
-  }
-
-  const [cashierRows] = await dbPool.query('SELECT id FROM users WHERE email = ? LIMIT 1', ['cajero@example.com']);
-  if (!cashierRows.length) {
-    if (hasRoleIdColumn && (await tableExists('roles'))) {
-      await dbPool.query(
-        `INSERT INTO users (role_id, email, name, role, is_active, password_hash)
-         VALUES ((SELECT id FROM roles WHERE name = 'cajero' LIMIT 1), ?, ?, 'cajero', 1, ?)`,
-        ['cajero@example.com', 'Cajero', hashPassword('cajero123')]
-      );
-    } else {
-      await dbPool.query(
-        `INSERT INTO users (email, name, role, is_active, password_hash)
-         VALUES (?, ?, 'cajero', 1, ?)`,
-        ['cajero@example.com', 'Cajero', hashPassword('cajero123')]
-      );
-    }
-  }
+  // No crear usuarios de ejemplo en ambientes reales.
+  // Limpia cuentas por defecto heredadas si aún existen.
+  await dbPool.query(
+    `DELETE FROM users
+     WHERE LOWER(email) IN ('admin@example.com', 'cajero@example.com')`
+  );
 
   await dbPool.query(
     `UPDATE users
