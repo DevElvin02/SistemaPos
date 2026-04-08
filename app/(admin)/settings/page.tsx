@@ -7,8 +7,8 @@ import { useState } from 'react';
 
 export default function SettingsPage() {
   const [formData, setFormData] = useState({
-    companyName: 'Sublimart',
-    email: 'admin@sublimart.com',
+    companyName: 'Motorepuestos',
+    email: 'admin@motorepuestos.com',
     phone: '+1 (555) 123-4567',
     address: '123 Business Street',
     city: 'New York',

@@ -1,15 +1,7 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AdminProvider } from './context/AdminContext';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { orders } from './lib/data/orders';
-import { customers } from './lib/data/customers';
-import { products } from './lib/data/products';
-import { categories } from './lib/data/categories';
-import { suppliers } from './lib/data/suppliers';
-import { purchases } from './lib/data/purchases';
-import { inventory, kardexMovements } from './lib/data/inventory';
-import { defaultSessions } from './lib/data/cash-register';
 
 import AdminLayout from './layouts/AdminLayout';
 import Dashboard from './pages/admin/Dashboard';
@@ -31,19 +23,21 @@ import ResetPassword from './pages/auth/ResetPassword';
 import Unauthorized from './pages/auth/Unauthorized';
 
 const initialState = {
-  orders,
-  customers,
-  products,
-  categories,
-  suppliers,
-  purchases,
-  inventory,
-  kardex: kardexMovements,
-  cashSessions: defaultSessions,
+  orders: [],
+  customers: [],
+  products: [],
+  categories: [],
+  suppliers: [],
+  purchases: [],
+  inventory: [],
+  kardex: [],
+  cashSessions: [],
   sidebarOpen: true,
 };
 
 function App() {
+  const Router = window.location.protocol === 'file:' ? HashRouter : BrowserRouter;
+
   return (
     <Router>
       <AuthProvider>

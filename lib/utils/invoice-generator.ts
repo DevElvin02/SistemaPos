@@ -224,7 +224,7 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
         </div>
 
         <div class="footer">
-          <p>Gracias por su compra • www.sublimart.com</p>
+          <p>Gracias por su compra • www.motorepuestos.com</p>
           <p style="margin-top: 10px; font-size: 11px;">Este documento fue generado automáticamente y es válido sin firma digital.</p>
         </div>
       </div>
@@ -410,7 +410,7 @@ export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
 
         <div class="footer">
           <p>Gracias por su compra</p>
-          <p style="margin-top: 5px;">www.sublimart.com</p>
+          <p style="margin-top: 5px;">www.motorepuestos.com</p>
         </div>
       </div>
     </body>

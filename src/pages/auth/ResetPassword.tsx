@@ -12,6 +12,7 @@ interface ResetTokenState {
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token') || '';
+  const isDesktopRuntime = window.location.protocol === 'file:';
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -94,8 +95,14 @@ export default function ResetPassword() {
     setLoading(true);
     try {
       await resetPassword(token, password);
-      setSuccess('Contraseña actualizada correctamente. Ya puedes iniciar sesión.');
-      setTimeout(() => navigate('/login'), 1200);
+      setSuccess(
+        isDesktopRuntime
+          ? 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.'
+          : 'Contraseña actualizada correctamente. Si eres cajero, inicia sesión desde la app de escritorio del negocio.'
+      );
+      if (isDesktopRuntime) {
+        setTimeout(() => navigate('/login'), 1200);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo restablecer la contraseña.');
     } finally {

@@ -155,6 +155,15 @@ export default function AdminDataBootstrap() {
   const { dispatch } = useAdmin();
   const loadedRef = useRef(false);
 
+  const safeRequest = async (path: string): Promise<Record<string, unknown>[]> => {
+    try {
+      return await apiRequest<Record<string, unknown>[]>(path);
+    } catch (error) {
+      console.warn(`[AdminDataBootstrap] No se pudo cargar ${path}`, error);
+      return [];
+    }
+  };
+
   useEffect(() => {
     if (!isAuthenticated) {
       loadedRef.current = false;
@@ -165,16 +174,16 @@ export default function AdminDataBootstrap() {
     loadedRef.current = true;
 
     Promise.all([
-      apiRequest<Record<string, unknown>[]>('/products'),
-      apiRequest<Record<string, unknown>[]>('/customers'),
-      apiRequest<Record<string, unknown>[]>('/categories'),
-      apiRequest<Record<string, unknown>[]>('/suppliers'),
-      apiRequest<Record<string, unknown>[]>('/inventory'),
-      apiRequest<Record<string, unknown>[]>('/inventory/movements'),
-      apiRequest<Record<string, unknown>[]>('/sales'),
-      apiRequest<Record<string, unknown>[]>('/purchases'),
-      apiRequest<Record<string, unknown>[]>('/cash/sessions'),
-      apiRequest<Record<string, unknown>[]>('/cash/movements'),
+      safeRequest('/products'),
+      safeRequest('/customers'),
+      safeRequest('/categories'),
+      safeRequest('/suppliers'),
+      safeRequest('/inventory'),
+      safeRequest('/inventory/movements'),
+      safeRequest('/sales'),
+      safeRequest('/purchases'),
+      safeRequest('/cash/sessions'),
+      safeRequest('/cash/movements'),
     ])
       .then(([products, customers, categories, suppliers, inventory, kardex, orders, purchases, sessions, movements]) => {
         const cashMovementsBySession = new Map<string, CashMovement[]>();

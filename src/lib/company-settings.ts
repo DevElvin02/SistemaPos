@@ -15,8 +15,8 @@ export interface CompanySettings {
 }
 
 export const defaultCompanySettings: CompanySettings = {
-  companyName: 'SUBLIMART',
-  email: 'info@sublimart.com',
+  companyName: 'MOTOREPUESTOS',
+  email: 'info@motorepuestos.com',
   phone: '+1 (555) 123-4567',
   address: 'Calle Principal 123, Ciudad',
   country: 'Colombia',

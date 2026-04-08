@@ -3,6 +3,11 @@ import { dbPool } from '../db/pool.js';
 
 const router = Router();
 
+function isSchemaMissing(error) {
+  const code = String(error?.code || '');
+  return code === 'ER_NO_SUCH_TABLE' || code === 'ER_BAD_FIELD_ERROR';
+}
+
 async function nextPurchaseNumber(connection) {
   const [rows] = await connection.query('SELECT MAX(id) AS max_id FROM purchases');
   const nextId = Number(rows[0]?.max_id || 0) + 1;
@@ -18,11 +23,14 @@ router.get('/', async (req, res, next) => {
        FROM purchases p
        LEFT JOIN suppliers s ON s.id = p.supplier_id
        LEFT JOIN purchase_items pi ON pi.purchase_id = p.id
-       GROUP BY p.id
+       GROUP BY p.id, p.purchase_number, p.supplier_id, s.name, p.purchase_date, p.total, p.status
        ORDER BY p.id DESC`
     );
     res.json({ ok: true, data: rows });
   } catch (error) {
+    if (isSchemaMissing(error)) {
+      return res.json({ ok: true, data: [] });
+    }
     next(error);
   }
 });

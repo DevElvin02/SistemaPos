@@ -102,7 +102,7 @@ export default function Login() {
       <div className="w-full max-w-md">
         <div className="bg-card rounded-2xl border border-border shadow-2xl p-8">
           <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold text-foreground mb-2">Sublimart</h1>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Motorepuestos</h1>
             <p className="text-muted-foreground">Sistema de Gestión Admin</p>
           </div>
 
@@ -188,7 +188,7 @@ export default function Login() {
 
               <div className="mt-8 pt-6 border-t border-border">
                 <p className="text-xs text-muted-foreground text-center mb-3">
-                  Demo - Datos de prueba:
+                  Credenciales iniciales en una base nueva:
                 </p>
                 <div className="space-y-2">
                   <button
@@ -206,6 +206,9 @@ export default function Login() {
                     Cajero: cajero@example.com
                   </button>
                 </div>
+                <p className="mt-3 text-[11px] text-center text-muted-foreground">
+                  Si restauraste usuarios o cambiaste la clave antes, usa la contraseña actual o la opcion de recuperar contraseña.
+                </p>
               </div>
             </>
           ) : (

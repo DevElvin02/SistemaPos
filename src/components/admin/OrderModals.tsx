@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Order } from '@/lib/data/orders'
-import { customers } from '@/lib/data/customers'
+import { useAdmin } from '@/context/AdminContext'
 import { generateInvoiceHTML, generateReceiptHTML, downloadDocument } from '@/lib/utils/invoice-generator'
 import { toast } from 'sonner'
 import { useCompanySettings } from '@/hooks/use-company-settings'
@@ -14,6 +14,7 @@ interface OrderModalsProps {
 
 export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder }: OrderModalsProps) {
   const { companySettings } = useCompanySettings()
+  const { state } = useAdmin()
   const [isInvoiceGenerating, setIsInvoiceGenerating] = useState(false)
   const [isReceiptGenerating, setIsReceiptGenerating] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
@@ -21,7 +22,7 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder }: Orde
 
   if (!order || !isOpen) return null
 
-  const customer = customers.find((c) => c.id === order.customerId)
+  const customer = state.customers.find((c) => c.id === order.customerId)
   const customerName = customer?.name || 'Cliente Desconocido'
   const customerEmail = customer?.email || 'No disponible'
 

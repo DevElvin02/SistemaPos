@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { useAdmin } from '@/context/AdminContext'
 import { useCompanySettings } from '@/hooks/use-company-settings'
@@ -6,7 +7,7 @@ import { useCompanySettings } from '@/hooks/use-company-settings'
 interface CreateOrderModalProps {
   isOpen: boolean
   onClose: () => void
-  onCreateOrder?: (order: any) => void
+  onCreateOrder?: (order: any) => Promise<boolean | void> | boolean | void
 }
 
 type PaymentMethod = 'cash' | 'transfer'
@@ -250,7 +251,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
     return () => window.removeEventListener('keydown', onKeyDown)
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!customerId) {
@@ -296,7 +297,11 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
       },
     }
 
-    onCreateOrder?.(newOrder)
+    const created = await onCreateOrder?.(newOrder)
+    if (created === false) {
+      return
+    }
+
     toast.success('Venta creada exitosamente')
     if (printTicket) {
       generateTicket(newOrder)
@@ -306,11 +311,12 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
   }
 
   if (!isOpen) return null
+  if (typeof document === 'undefined') return null
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+  return createPortal((
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-2 sm:p-4" onClick={onClose}>
       <div
-        className="bg-card rounded-2xl shadow-[0_28px_60px_-35px_rgba(15,23,42,0.8)] border border-border/70 w-full max-w-6xl max-h-[94vh] overflow-hidden"
+        className="bg-card rounded-2xl shadow-[0_28px_60px_-35px_rgba(15,23,42,0.8)] border border-border/70 w-full max-w-[1180px] h-[calc(100vh-1rem)] sm:h-[94vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="bg-gradient-to-r from-primary to-primary/85 text-primary-foreground px-6 py-4 border-b border-border/50">
@@ -325,8 +331,9 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
           </div>
         </div>
 
-        <form id="pos-sale-form" onSubmit={handleSubmit} className="p-5 overflow-y-auto max-h-[calc(94vh-84px)]">
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        <form id="pos-sale-form" onSubmit={handleSubmit} className="flex flex-col h-[calc(100%-84px)] min-h-0">
+          <div className="p-4 sm:p-5 overflow-y-auto min-h-0">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
             <div className="xl:col-span-2 space-y-4">
               <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
                 <label className="block text-sm font-semibold mb-2">Cliente</label>
@@ -424,7 +431,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
                     />
                   </div>
 
-                  <div>
+                  <div className="md:min-w-[120px]">
                     <button
                       type="button"
                       onClick={handleAddProduct}
@@ -437,41 +444,45 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
               </div>
 
               <div className="border border-border/70 rounded-xl overflow-hidden bg-card">
-                <div className="grid grid-cols-12 gap-2 px-3 py-2.5 bg-muted/50 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  <span className="col-span-5">Producto</span>
-                  <span className="col-span-2 text-right">Precio</span>
-                  <span className="col-span-2 text-right">Cantidad</span>
-                  <span className="col-span-2 text-right">Subtotal</span>
-                  <span className="col-span-1 text-right">Acción</span>
-                </div>
-
-                {lineItems.length === 0 ? (
-                  <p className="px-4 py-10 text-sm text-muted-foreground text-center">No hay productos agregados.</p>
-                ) : (
-                  lineItems.map((line) => (
-                    <div key={line.id} className="grid grid-cols-12 gap-2 px-3 py-3 border-t border-border/70 text-sm items-center">
-                      <span className="col-span-5 font-medium text-secondary">
-                        {line.productName}
-                        <span className="ml-2 text-xs text-muted-foreground">{line.sku}</span>
-                      </span>
-                      <span className="col-span-2 text-right">${line.unitPrice.toFixed(2)}</span>
-                      <span className="col-span-2 text-right">{line.quantity}</span>
-                      <span className="col-span-2 text-right font-semibold">${line.subtotal.toFixed(2)}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveLine(line.id)}
-                        className="col-span-1 text-right text-destructive hover:underline"
-                      >
-                        Quitar
-                      </button>
+                <div className="overflow-x-auto">
+                  <div className="min-w-[680px]">
+                    <div className="grid grid-cols-12 gap-2 px-3 py-2.5 bg-muted/50 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      <span className="col-span-5">Producto</span>
+                      <span className="col-span-2 text-right">Precio</span>
+                      <span className="col-span-2 text-right">Cantidad</span>
+                      <span className="col-span-2 text-right">Subtotal</span>
+                      <span className="col-span-1 text-right">Acción</span>
                     </div>
-                  ))
-                )}
+
+                    {lineItems.length === 0 ? (
+                      <p className="px-4 py-10 text-sm text-muted-foreground text-center">No hay productos agregados.</p>
+                    ) : (
+                      lineItems.map((line) => (
+                        <div key={line.id} className="grid grid-cols-12 gap-2 px-3 py-3 border-t border-border/70 text-sm items-center">
+                          <span className="col-span-5 font-medium text-secondary">
+                            {line.productName}
+                            <span className="ml-2 text-xs text-muted-foreground">{line.sku}</span>
+                          </span>
+                          <span className="col-span-2 text-right">${line.unitPrice.toFixed(2)}</span>
+                          <span className="col-span-2 text-right">{line.quantity}</span>
+                          <span className="col-span-2 text-right font-semibold">${line.subtotal.toFixed(2)}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveLine(line.id)}
+                            className="col-span-1 text-right text-destructive hover:underline"
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-xl border border-border/70 bg-muted/30 p-4 space-y-3 sticky top-0">
+              <div className="rounded-xl border border-border/70 bg-muted/30 p-4 space-y-3 xl:sticky xl:top-0">
                 <h3 className="font-semibold text-secondary">Cobro y comprobante</h3>
 
                 <div>
@@ -550,8 +561,9 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
               </div>
             </div>
           </div>
+          </div>
 
-          <div className="mt-5 bg-muted/45 border border-border/70 rounded-xl px-4 py-3 flex flex-wrap justify-end gap-3">
+          <div className="sticky bottom-0 z-20 border-t border-border/70 bg-muted/95 px-4 py-3 flex flex-wrap justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
@@ -569,5 +581,5 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
         </form>
       </div>
     </div>
-  )
+  ), document.body)
 }

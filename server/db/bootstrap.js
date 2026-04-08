@@ -165,6 +165,15 @@ export async function bootstrapSchema() {
        SET token = COALESCE(token, token_hash)
        WHERE token IS NULL OR token = ''`
     );
+
+    try {
+      await dbPool.query(
+        'ALTER TABLE password_reset_tokens MODIFY token_hash VARCHAR(255) NULL'
+      );
+    } catch (error) {
+      if (!isPermissionError(error)) throw error;
+      console.warn('[DB bootstrap] Sin permisos para modificar password_reset_tokens.token_hash. Se continua.');
+    }
   }
 
   const [adminRows] = await dbPool.query('SELECT id FROM users WHERE email = ? LIMIT 1', ['admin@example.com']);

@@ -143,12 +143,12 @@ export default function Orders() {
       const inventoryItem = state.inventory.find((item) => item.productId === line.productId);
       if (!inventoryItem) {
         toast.error(`No existe inventario para ${line.productName}`);
-        return;
+        return false;
       }
 
       if (line.quantity > inventoryItem.quantity) {
         toast.error(`Stock insuficiente para ${line.productName}. Disponible: ${inventoryItem.quantity}`);
-        return;
+        return false;
       }
     }
 
@@ -178,7 +178,7 @@ export default function Orders() {
         customerId: newOrder.customerId,
         customerName: newOrder.customerName,
         amount: Number(data.total ?? newOrder.amount),
-        status: 'pending',
+        status: (data.status as Order['status']) ?? 'paid',
         items: newOrder.items,
         date: new Date(newOrder.date),
       };
@@ -197,8 +197,10 @@ export default function Orders() {
           },
         });
       }
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo registrar la venta');
+      return false;
     }
   };
 

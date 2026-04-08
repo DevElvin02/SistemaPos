@@ -15,10 +15,14 @@ __v0_jsx-dev-runtime.ts
 dist/
 dist-ssr/
 *.local
+*.tsbuildinfo
 
 # Build output
 coverage/
 .nyc_output/
+release/
+release-build/
+server/backups/
 
 # Editor
 .vscode/

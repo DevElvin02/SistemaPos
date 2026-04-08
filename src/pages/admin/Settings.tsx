@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
@@ -23,10 +23,12 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
-    companyName: 'SUBLIMART',
-    email: 'info@sublimart.com',
+    companyName: 'Motorepuestos',
+    email: 'info@motorepuestos.com',
     phone: '+1 (555) 123-4567',
     address: 'Calle Principal 123, Ciudad',
     country: 'Colombia',
@@ -44,8 +46,8 @@ export default function Settings() {
         const data = await apiRequest<SettingsPayload>('/settings');
         persistCompanySettings(data);
         setFormData({
-          companyName: data.companyName || 'SUBLIMART',
-          email: data.email || 'info@sublimart.com',
+          companyName: data.companyName || 'MOTOREPUESTOS',
+          email: data.email || 'info@motorepuestos.com',
           phone: data.phone || '',
           address: data.address || '',
           country: data.country || '',
@@ -102,18 +104,52 @@ export default function Settings() {
   const handleBackupNow = async () => {
     setBackingUp(true);
     try {
-      const data = await apiRequest<{ fileName: string; createdAt: string }>('/settings/backup', {
+      const data = await apiRequest<{ fileName: string; createdAt: string; backup: unknown }>('/settings/backup', {
         method: 'POST',
       });
       setSecurityData((prev) => ({
         ...prev,
         lastBackup: new Date(data.createdAt).toLocaleDateString('es-ES'),
       }));
-      toast.success(`Respaldo creado: ${data.fileName}`);
+
+      // Descargar el archivo de respaldo automáticamente
+      const blob = new Blob([JSON.stringify(data.backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = data.fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      toast.success(`Respaldo creado y descargado: ${data.fileName}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo crear el respaldo');
     } finally {
       setBackingUp(false);
+    }
+  };
+
+  const handleRestoreClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleRestoreFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setRestoring(true);
+    try {
+      const text = await file.text();
+      const backup = JSON.parse(text) as unknown;
+      const data = await apiRequest<{ usersRestored: number }>('/settings/restore', {
+        method: 'POST',
+        body: { backup },
+      });
+      toast.success(`Respaldo restaurado: ${data.usersRestored} usuario(s) importado(s)`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo restaurar el respaldo');
+    } finally {
+      setRestoring(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -263,7 +299,22 @@ export default function Settings() {
               disabled={backingUp}
               className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground px-4 py-2 rounded-lg transition"
             >
-              {backingUp ? 'Generando respaldo...' : 'Hacer Respaldo Ahora'}
+              {backingUp ? 'Generando respaldo...' : 'Hacer Respaldo y Descargar'}
+            </button>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handleRestoreFile}
+            />
+            <button
+              onClick={handleRestoreClick}
+              disabled={restoring}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition"
+            >
+              {restoring ? 'Restaurando...' : 'Restaurar desde Respaldo'}
             </button>
 
             <button

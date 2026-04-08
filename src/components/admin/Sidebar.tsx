@@ -159,7 +159,7 @@ export default function Sidebar() {
             S
           </div>
           <div>
-            <h1 className="font-bold text-lg tracking-tight">Sublimart</h1>
+            <h1 className="font-bold text-lg tracking-tight">Motorepuestos</h1>
             <p className="text-xs text-sidebar-foreground/70">
               {user?.role === 'admin' ? 'Administrador' : 'Cajero'}
             </p>
@@ -197,7 +197,7 @@ export default function Sidebar() {
       {/* Footer */}
       <div className="border-t border-sidebar-border/70 p-4">
         <div className="text-xs text-sidebar-foreground/65">
-          <p className="font-semibold text-sidebar-foreground">Sublimart POS</p>
+          <p className="font-semibold text-sidebar-foreground">Motorepuestos POS</p>
           <p>v1.0.0</p>
         </div>
       </div>

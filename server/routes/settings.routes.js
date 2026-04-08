@@ -99,7 +99,12 @@ router.post('/backup', async (req, res, next) => {
     const [salesCountRows] = await dbPool.query('SELECT COUNT(*) AS total FROM sales');
     const [purchasesCountRows] = await dbPool.query('SELECT COUNT(*) AS total FROM purchases');
 
+    const [usersRows] = await dbPool.query(
+      `SELECT email, name, role, is_active, password_hash FROM users ORDER BY id`
+    );
+
     const snapshot = {
+      version: 2,
       createdAt: new Date().toISOString(),
       summary: {
         products: Number(productsCountRows[0]?.total || 0),
@@ -107,6 +112,7 @@ router.post('/backup', async (req, res, next) => {
         sales: Number(salesCountRows[0]?.total || 0),
         purchases: Number(purchasesCountRows[0]?.total || 0),
       },
+      users: usersRows,
     };
 
     const backupsDir = path.join(projectRoot, 'server', 'backups');
@@ -125,8 +131,46 @@ router.post('/backup', async (req, res, next) => {
         fileName,
         relativePath: path.join('server', 'backups', fileName),
         createdAt: snapshot.createdAt,
+        backup: snapshot,
       },
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/restore', async (req, res, next) => {
+  try {
+    const { backup } = req.body || {};
+
+    if (!backup || !Array.isArray(backup.users)) {
+      return res.status(400).json({ ok: false, message: 'Archivo de respaldo inválido o sin datos de usuarios' });
+    }
+
+    let usersRestored = 0;
+    for (const user of backup.users) {
+      if (!user.email || !user.password_hash) continue;
+      const role = ['admin', 'cajero'].includes(String(user.role)) ? String(user.role) : 'cajero';
+      await dbPool.query(
+        `INSERT INTO users (email, name, role, is_active, password_hash)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           name = VALUES(name),
+           role = VALUES(role),
+           is_active = VALUES(is_active),
+           password_hash = VALUES(password_hash)`,
+        [
+          String(user.email).trim().toLowerCase(),
+          String(user.name || '').trim() || 'Usuario',
+          role,
+          user.is_active ? 1 : 0,
+          String(user.password_hash),
+        ]
+      );
+      usersRestored++;
+    }
+
+    return res.json({ ok: true, data: { usersRestored } });
   } catch (error) {
     return next(error);
   }

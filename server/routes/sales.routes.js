@@ -3,6 +3,11 @@ import { dbPool } from '../db/pool.js';
 
 const router = Router();
 
+function isSchemaMissing(error) {
+  const code = String(error?.code || '');
+  return code === 'ER_NO_SUCH_TABLE' || code === 'ER_BAD_FIELD_ERROR';
+}
+
 async function nextSaleNumber(connection) {
   const [rows] = await connection.query('SELECT MAX(id) AS max_id FROM sales');
   const maxId = Number(rows[0]?.max_id || 0) + 1;
@@ -18,12 +23,15 @@ router.get('/', async (req, res, next) => {
        FROM sales s
        LEFT JOIN customers c ON c.id = s.customer_id
        LEFT JOIN sale_items si ON si.sale_id = s.id
-       GROUP BY s.id
+       GROUP BY s.id, s.sale_number, s.customer_id, c.name, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
        ORDER BY s.id DESC
        LIMIT 200`
     );
     res.json({ ok: true, data: rows });
   } catch (error) {
+    if (isSchemaMissing(error)) {
+      return res.json({ ok: true, data: [] });
+    }
     next(error);
   }
 });
@@ -176,7 +184,7 @@ router.patch('/:id/status', async (req, res, next) => {
        LEFT JOIN customers c ON c.id = s.customer_id
        LEFT JOIN sale_items si ON si.sale_id = s.id
        WHERE s.id = ?
-       GROUP BY s.id`,
+       GROUP BY s.id, s.sale_number, s.customer_id, c.name, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status`,
       [id]
     );
     res.json({ ok: true, data: rows[0] });

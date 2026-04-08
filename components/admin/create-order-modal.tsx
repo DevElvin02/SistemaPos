@@ -191,7 +191,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
           </style>
         </head>
         <body>
-          <h2>Sublimart POS - ${order.documentType === 'invoice' ? 'Factura' : 'Ticket'}</h2>
+          <h2>Motorepuestos POS - ${order.documentType === 'invoice' ? 'Factura' : 'Ticket'}</h2>
           <p><strong>Orden:</strong> ${order.orderNumber}</p>
           <p><strong>Cliente:</strong> ${order.customerName}</p>
           <p><strong>Pago:</strong> ${order.payment.method === 'cash' ? 'Efectivo' : 'Transferencia'}</p>

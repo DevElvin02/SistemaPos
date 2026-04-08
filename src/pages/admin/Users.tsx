@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Search, Shield, UserCog } from 'lucide-react';
+import { Plus, Search, Shield, UserCog, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import DataTable from '@/components/admin/DataTable';
 import StatusBadge from '@/components/admin/StatusBadge';
@@ -7,6 +7,7 @@ import { DeleteConfirmModal } from '@/components/admin/EntityModals';
 import { useAuth } from '@/context/AuthContext';
 import { createManagedUser, deleteManagedUser, getManagedUsers, updateManagedUser } from '@/lib/auth-store';
 import { User, UserRole } from '@/types/auth';
+import { validateUserForm, isEmailUnique } from '@/lib/validators';
 
 interface UserFormData {
   name: string;
@@ -14,6 +15,12 @@ interface UserFormData {
   role: UserRole;
   password: string;
   activo: boolean;
+}
+
+interface FormErrors {
+  name?: string;
+  email?: string;
+  password?: string;
 }
 
 const initialFormData: UserFormData = {
@@ -31,6 +38,7 @@ export default function Users() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [formData, setFormData] = useState<UserFormData>(initialFormData);
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const reloadUsers = async () => {
@@ -58,6 +66,7 @@ export default function Users() {
   const openCreateModal = () => {
     setSelectedUser(null);
     setFormData(initialFormData);
+    setFormErrors({});
     setIsModalOpen(true);
   };
 
@@ -70,31 +79,51 @@ export default function Users() {
       password: '',
       activo: target.activo,
     });
+    setFormErrors({});
     setIsModalOpen(true);
   };
 
   const handleSave = async () => {
-    if (!formData.name.trim() || !formData.email.trim()) {
-      toast.error('Completa nombre y email');
+    // Validar formulario
+    const errors = validateUserForm(
+      formData.name,
+      formData.email,
+      formData.password,
+      !selectedUser // isCreate = true if no selectedUser
+    );
+
+    // Validar email único (solo contra otros usuarios, no contra el actual en edición)
+    const existingEmails = users.map(u => u.email);
+    if (!isEmailUnique(formData.email, existingEmails, selectedUser?.email)) {
+      errors.email = 'Ya existe un usuario con ese email';
+    }
+
+    // Si hay errores, mostrar y no enviar
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
       return;
     }
+
+    setFormErrors({});
 
     try {
       if (selectedUser) {
         await updateManagedUser(selectedUser.id, formData);
-        toast.success('Usuario actualizado');
+        toast.success('Usuario actualizado exitosamente');
       } else {
-        if (!formData.password.trim()) {
-          toast.error('Ingresa una contraseña para el nuevo usuario');
-          return;
-        }
         await createManagedUser(formData);
-        toast.success('Usuario creado');
+        toast.success('Usuario creado exitosamente');
       }
       await reloadUsers();
       setIsModalOpen(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo guardar el usuario');
+      const message = error instanceof Error ? error.message : 'No se pudo guardar el usuario';
+      // Backend might also return email duplicate error
+      if (message.includes('email')) {
+        setFormErrors({ email: message });
+      } else {
+        toast.error(message);
+      }
     }
   };
 
@@ -222,34 +251,86 @@ export default function Users() {
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Nombre</label>
-                <input type="text" value={formData.name} onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))} className="w-full px-3 py-2 border border-border rounded-lg" />
+                <input 
+                  type="text" 
+                  value={formData.name} 
+                  onChange={(e) => {
+                    setFormData((prev) => ({ ...prev, name: e.target.value }));
+                    if (formErrors.name) setFormErrors((prev) => ({ ...prev, name: undefined }));
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg ${formErrors.name ? 'border-destructive focus:ring-destructive' : 'border-border focus:ring-primary'} focus:outline-none focus:ring-2`}
+                  placeholder="Nombre completo"
+                />
+                {formErrors.name && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{formErrors.name}</p>}
               </div>
+              
               <div>
                 <label className="block text-sm font-medium mb-1">Email</label>
-                <input type="email" value={formData.email} onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))} className="w-full px-3 py-2 border border-border rounded-lg" />
+                <input 
+                  type="email" 
+                  value={formData.email} 
+                  onChange={(e) => {
+                    setFormData((prev) => ({ ...prev, email: e.target.value }));
+                    if (formErrors.email) setFormErrors((prev) => ({ ...prev, email: undefined }));
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg ${formErrors.email ? 'border-destructive focus:ring-destructive' : 'border-border focus:ring-primary'} focus:outline-none focus:ring-2`}
+                  placeholder="usuario@example.com"
+                />
+                {formErrors.email && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{formErrors.email}</p>}
               </div>
+              
               <div>
                 <label className="block text-sm font-medium mb-1">Rol</label>
-                <select value={formData.role} onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value as UserRole }))} className="w-full px-3 py-2 border border-border rounded-lg bg-background">
+                <select 
+                  value={formData.role} 
+                  onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value as UserRole }))} 
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                >
                   <option value="admin">Administrador</option>
                   <option value="cajero">Cajero</option>
                 </select>
               </div>
+              
               <div>
                 <label className="block text-sm font-medium mb-1">Contraseña {selectedUser ? '(opcional)' : ''}</label>
-                <input type="password" value={formData.password} onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))} className="w-full px-3 py-2 border border-border rounded-lg" />
+                <input 
+                  type="password" 
+                  value={formData.password} 
+                  onChange={(e) => {
+                    setFormData((prev) => ({ ...prev, password: e.target.value }));
+                    if (formErrors.password) setFormErrors((prev) => ({ ...prev, password: undefined }));
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg ${formErrors.password ? 'border-destructive focus:ring-destructive' : 'border-border focus:ring-primary'} focus:outline-none focus:ring-2`}
+                  placeholder={selectedUser ? 'Dejar en blanco para no cambiar' : 'Mínimo 4 caracteres'}
+                />
+                {formErrors.password && <p className="text-xs text-destructive mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{formErrors.password}</p>}
               </div>
+              
               <div className="md:col-span-2">
                 <label className="inline-flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={formData.activo} onChange={(e) => setFormData((prev) => ({ ...prev, activo: e.target.checked }))} />
+                  <input 
+                    type="checkbox" 
+                    checked={formData.activo} 
+                    onChange={(e) => setFormData((prev) => ({ ...prev, activo: e.target.checked }))} 
+                  />
                   Usuario activo
                 </label>
               </div>
             </div>
 
             <div className="bg-muted/50 border-t p-4 flex justify-end gap-3">
-              <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 rounded-lg border border-border hover:bg-muted transition">Cancelar</button>
-              <button onClick={handleSave} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition">Guardar</button>
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="px-4 py-2 rounded-lg border border-border hover:bg-muted transition"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleSave} 
+                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition"
+              >
+                Guardar
+              </button>
             </div>
           </div>
         </div>

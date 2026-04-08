@@ -1,7 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+var isElectronBuild = process.env.ELECTRON === 'true';
 export default defineConfig({
+    base: isElectronBuild ? './' : '/',
     plugins: [react()],
     resolve: {
         alias: {
@@ -11,6 +13,12 @@ export default defineConfig({
     server: {
         port: 5173,
         open: true,
+        proxy: {
+            '/api': {
+                target: process.env.VITE_DEV_API_TARGET || 'http://localhost:4000',
+                changeOrigin: true,
+            },
+        },
     },
     build: {
         target: 'es2020',

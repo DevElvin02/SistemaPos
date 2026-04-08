@@ -115,7 +115,7 @@ export default function Sidebar({ isOpen }: SidebarProps) {
             <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center font-bold text-sm">
               S
             </div>
-            <h1 className="font-bold text-lg">Sublimart</h1>
+            <h1 className="font-bold text-lg">Motorepuestos</h1>
           </div>
         )}
       </div>
@@ -154,7 +154,7 @@ export default function Sidebar({ isOpen }: SidebarProps) {
       <div className="border-t border-slate-700 p-4">
         {isOpen && (
           <div className="text-xs text-slate-400">
-            <p className="font-semibold">Sublimart Admin</p>
+            <p className="font-semibold">Motorepuestos Admin</p>
             <p>v1.0.0</p>
           </div>
         )}
