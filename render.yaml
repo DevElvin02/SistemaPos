@@ -32,9 +32,9 @@ services:
       - key: APP_BASE_URL
         sync: false
       - key: CASHIER_DESKTOP_ONLY
-        value: false
-      - key: CASHIER_ALLOW_WEB_LOGIN
         value: true
+      - key: CASHIER_ALLOW_WEB_LOGIN
+        value: false
       - key: CASHIER_ALLOWED_IPS
         sync: false
       - key: CASHIER_ALLOWED_ORIGINS
