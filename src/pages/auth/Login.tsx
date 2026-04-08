@@ -104,9 +104,9 @@ export default function Login() {
 
   return (
     <div className="h-screen overflow-hidden bg-[#12080A] flex items-center justify-center px-4">
-      <div className="w-full max-w-6xl">
+      <div className="w-full max-w-4xl">
         <div className="relative w-full overflow-hidden rounded-[30px] border border-white/10 bg-white shadow-[0_38px_80px_-36px_rgba(0,0,0,0.8)] lg:grid lg:grid-cols-[1.08fr_0.92fr]">
-          <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10 lg:px-12 lg:py-12">
+          <div className="relative z-10 px-6 py-7 sm:px-8 sm:py-8 lg:px-10 lg:py-10">
             <div className="mb-8">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">Sistematienda</p>
               <h1 className="mt-3 text-3xl font-black leading-tight text-[#121212] sm:text-4xl">Iniciar sesion</h1>
