@@ -249,7 +249,7 @@ export default function Orders() {
       <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold sm:text-3xl">Gestión de Ventas</h1>
-          <p className="text-muted-foreground mt-1">Manage and track all orders</p>
+          <p className="text-muted-foreground mt-1">Administra y monitorea todas las ventas</p>
         </div>
         <button 
           onClick={() => setIsCreateModalOpen(true)}
@@ -266,7 +266,7 @@ export default function Orders() {
             <Search className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Buscar por número de orden o cliente..."
+              placeholder="Buscar venta..."
               value={searchTerm}
               onChange={handleSearch}
               className="pl-10 w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"

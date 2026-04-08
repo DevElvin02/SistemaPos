@@ -56,6 +56,8 @@ export default function Customers() {
   const { state, dispatch } = useAdmin();
   const { hasPermission } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCity, setSelectedCity] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
   const [onlyFrequent, setOnlyFrequent] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [historyCustomer, setHistoryCustomer] = useState<Customer | null>(null);
@@ -114,12 +116,26 @@ export default function Customers() {
         customer.name.toLowerCase().includes(term) ||
         customer.email.toLowerCase().includes(term) ||
         customer.phone.toLowerCase().includes(term) ||
-        (customer.company ?? '').toLowerCase().includes(term);
+        (customer.company ?? '').toLowerCase().includes(term) ||
+        customer.city.toLowerCase().includes(term);
+
+      const matchesCity = selectedCity === 'all' || customer.city.toLowerCase() === selectedCity.toLowerCase();
+      const matchesStatus = selectedStatus === 'all' || customer.status === selectedStatus;
 
       const matchesFrequent = !onlyFrequent || frequentCustomerIds.has(customer.id);
-      return matchesSearch && matchesFrequent;
+      return matchesSearch && matchesCity && matchesStatus && matchesFrequent;
     });
-  }, [frequentCustomerIds, onlyFrequent, searchTerm, state.customers]);
+  }, [frequentCustomerIds, onlyFrequent, searchTerm, selectedCity, selectedStatus, state.customers]);
+
+  const cityOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        state.customers
+          .map((customer) => String(customer.city || '').trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  }, [state.customers]);
 
   const frequentCustomerCount = frequentCustomerIds.size;
 
@@ -321,16 +337,16 @@ export default function Customers() {
   ];
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Gestión de Clientes</h1>
+          <h1 className="text-2xl font-bold sm:text-3xl">Gestión de Clientes</h1>
           <p className="text-muted-foreground mt-1">Registro, historial de compras y clientes frecuentes</p>
         </div>
         <button
           onClick={openCreateModal}
           disabled={!canCreate}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg flex items-center gap-2"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 sm:w-auto"
         >
           <Plus className="w-4 h-4" />
           Nuevo Cliente
@@ -354,19 +370,47 @@ export default function Customers() {
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border border-border p-4 mb-6">
-        <div className="flex gap-4">
+      <div className="mb-6 rounded-lg border border-border bg-card p-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="sm:w-56">
+            <select
+              value={selectedCity}
+              onChange={(e) => setSelectedCity(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="all">Todas las ciudades</option>
+              {cityOptions.map((city) => (
+                <option key={city} value={city}>
+                  {city}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="sm:w-56">
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="all">Todos los estados</option>
+              <option value="active">Activos</option>
+              <option value="inactive">Inactivos</option>
+              <option value="suspended">Suspendidos</option>
+            </select>
+          </div>
+
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Buscar por nombre, email o empresa..."
+              placeholder="Buscar cliente..."
               value={searchTerm}
               onChange={handleSearch}
               className="pl-10 w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
-          <label className="inline-flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
+          <label className="inline-flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap sm:pl-2">
             <input
               type="checkbox"
               checked={onlyFrequent}
