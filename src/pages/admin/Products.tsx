@@ -399,17 +399,17 @@ export default function Products() {
   ];
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Gestión de Productos</h1>
+          <h1 className="text-2xl font-bold sm:text-3xl">Gestión de Productos</h1>
           <p className="text-muted-foreground mt-1">Manage your product catalog</p>
         </div>
         {user?.role !== 'cajero' && (
           <button
             onClick={openCreateModal}
             disabled={!canCreate}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg flex items-center gap-2"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 sm:w-auto"
           >
             <Plus className="w-4 h-4" />
             Nuevo Producto
@@ -417,8 +417,8 @@ export default function Products() {
         )}
       </div>
 
-      <div className="bg-card rounded-lg border border-border p-4 mb-6">
-        <div className="flex gap-4">
+      <div className="mb-6 rounded-lg border border-border bg-card p-4">
+        <div className="flex flex-col gap-4 sm:flex-row">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
             <input

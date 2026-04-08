@@ -32,7 +32,7 @@ const initialState = {
   inventory: [],
   kardex: [],
   cashSessions: [],
-  sidebarOpen: true,
+  sidebarOpen: typeof window !== 'undefined' ? window.innerWidth >= 1024 : true,
 };
 
 function App() {

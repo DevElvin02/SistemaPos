@@ -1,4 +1,4 @@
-import { Bell, Settings, LogOut, User, ChevronDown } from 'lucide-react';
+import { Bell, Settings, LogOut, User, ChevronDown, Menu } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -16,7 +16,7 @@ const READ_NOTIFICATIONS_KEY = 'admin_notifications_read';
 
 export default function Header() {
   const { user, logout, isAuthenticated, hasPermission } = useAuth();
-  const { state } = useAdmin();
+  const { state, dispatch } = useAdmin();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -189,66 +189,84 @@ export default function Header() {
   };
 
   return (
-    <header className="relative z-[70] shrink-0 overflow-visible bg-white/85 border-b border-border/70 px-6 py-4 flex items-center justify-between backdrop-blur-md">
-      <div className="flex items-center gap-4">
-        <h2 className="text-3xl font-bold tracking-tight text-secondary">Motorepuestos <span className="text-primary">POS</span></h2>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <div className="relative" ref={notificationsRef}>
+    <header className="relative z-[70] shrink-0 overflow-visible border-b border-border/70 bg-white/85 px-4 py-3 backdrop-blur-md sm:px-6 sm:py-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           <button
-            onClick={toggleNotifications}
-            className="relative p-2.5 text-foreground hover:bg-muted rounded-xl transition"
-            aria-label="Notifications"
+            type="button"
+            onClick={() => dispatch({ type: 'TOGGLE_SIDEBAR' })}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background text-foreground transition hover:bg-muted lg:hidden"
+            aria-label="Abrir menu lateral"
           >
-            <Bell className="w-5 h-5" />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-semibold flex items-center justify-center">
-                {unreadCount}
-              </span>
-            )}
+            <Menu className="h-5 w-5" />
           </button>
+
+          <div className="min-w-0">
+            <h2 className="truncate text-xl font-bold tracking-tight text-secondary sm:text-2xl lg:text-3xl">
+              Motorepuestos <span className="text-primary">POS</span>
+            </h2>
+            <p className="text-xs text-muted-foreground sm:hidden">
+              {user.role === 'admin' ? 'Administrador' : 'Cajero'}
+            </p>
+          </div>
         </div>
 
-        {hasPermission('settings.view') && (
-          <button
-            onClick={handleOpenSettings}
-            className="p-2.5 text-foreground hover:bg-muted rounded-xl transition"
-            aria-label="Settings"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
-        )}
+        <div className="flex items-center gap-2 sm:gap-4">
+          <div className="relative" ref={notificationsRef}>
+            <button
+              onClick={toggleNotifications}
+              className="relative rounded-xl p-2.5 text-foreground transition hover:bg-muted"
+              aria-label="Notifications"
+            >
+              <Bell className="w-5 h-5" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+          </div>
 
-        <div className="h-8 w-px bg-border" />
+          {hasPermission('settings.view') && (
+            <button
+              onClick={handleOpenSettings}
+              className="hidden rounded-xl p-2.5 text-foreground transition hover:bg-muted sm:inline-flex"
+              aria-label="Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          )}
 
-        <div className="relative" ref={userRef}>
-          <button
-            onClick={() => {
-              setDropdownOpen((prev) => {
-                const nextValue = !prev;
-                if (nextValue) {
-                  setTimeout(syncMenuPositions, 0);
-                }
-                return nextValue;
-              });
-              setNotificationsOpen(false);
-            }}
-            className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-muted transition"
-          >
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                <User className="w-4 h-4 text-primary" />
-              </div>
-              <div className="text-left">
-                <div className="text-sm font-medium text-foreground">{user.name}</div>
-                <div className={`text-xs px-2 py-0.5 rounded-full ${getRoleBadge(user.role)}`}>
-                  {user.role === 'admin' ? 'Administrador' : 'Cajero'}
+          <div className="hidden h-8 w-px bg-border sm:block" />
+
+          <div className="relative" ref={userRef}>
+            <button
+              onClick={() => {
+                setDropdownOpen((prev) => {
+                  const nextValue = !prev;
+                  if (nextValue) {
+                    setTimeout(syncMenuPositions, 0);
+                  }
+                  return nextValue;
+                });
+                setNotificationsOpen(false);
+              }}
+              className="flex items-center gap-2 rounded-xl px-2 py-2 transition hover:bg-muted sm:gap-3 sm:px-3"
+            >
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20">
+                  <User className="w-4 h-4 text-primary" />
+                </div>
+                <div className="hidden text-left sm:block">
+                  <div className="max-w-[150px] truncate text-sm font-medium text-foreground">{user.name}</div>
+                  <div className={`text-xs px-2 py-0.5 rounded-full ${getRoleBadge(user.role)}`}>
+                    {user.role === 'admin' ? 'Administrador' : 'Cajero'}
+                  </div>
                 </div>
               </div>
-            </div>
-            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-          </button>
+              <ChevronDown className="hidden w-4 h-4 text-muted-foreground sm:block" />
+            </button>
+          </div>
         </div>
       </div>
 

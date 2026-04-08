@@ -79,6 +79,7 @@ type AdminAction =
         notes?: string;
       };
     }
+  | { type: 'SET_SIDEBAR'; payload: boolean }
   | { type: 'TOGGLE_SIDEBAR' };
 
 interface AdminContextType {
@@ -327,6 +328,9 @@ function adminReducer(state: AdminState, action: AdminAction): AdminState {
       });
       return { ...state, cashSessions: updatedSessions };
     }
+
+    case 'SET_SIDEBAR':
+      return { ...state, sidebarOpen: action.payload };
 
     case 'TOGGLE_SIDEBAR':
       return { ...state, sidebarOpen: !state.sidebarOpen };

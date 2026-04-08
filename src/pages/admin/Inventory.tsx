@@ -237,9 +237,9 @@ export default function Inventory() {
   ];
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Gestión de Inventario</h1>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl font-bold sm:text-3xl">Gestión de Inventario</h1>
         <p className="text-muted-foreground mt-1">Control total de stock, entradas, salidas y kardex</p>
       </div>
 
@@ -279,7 +279,7 @@ export default function Inventory() {
       )}
 
       <div className="bg-card rounded-lg border border-border p-4 mb-6">
-        <div className="flex gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
             <input

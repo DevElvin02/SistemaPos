@@ -14,6 +14,8 @@ import {
   Bell,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useAdmin } from '../../context/AdminContext';
+import { cn } from '../../lib/utils';
 
 interface NavItem {
   name: string;
@@ -27,9 +29,15 @@ interface NavGroup {
   items: NavItem[];
 }
 
-export default function Sidebar() {
+interface SidebarProps {
+  className?: string;
+  onNavigate?: () => void;
+}
+
+export default function Sidebar({ className, onNavigate }: SidebarProps) {
   const location = useLocation();
   const { user, hasPermission } = useAuth();
+  const { state } = useAdmin();
 
   const navGroups: NavGroup[] = [
     {
@@ -151,7 +159,10 @@ export default function Sidebar() {
     .filter(group => group.items.length > 0);
 
   return (
-    <aside className="w-72 flex flex-col h-full rounded-2xl overflow-hidden border border-sidebar-border/70 bg-[linear-gradient(180deg,#1E293B_0%,#162334_45%,#111C2B_100%)] text-sidebar-foreground shadow-[0_20px_50px_-28px_rgba(15,23,42,0.9)]">
+    <aside className={cn(
+      "w-72 flex h-full flex-col overflow-hidden border border-sidebar-border/70 bg-[linear-gradient(180deg,#1E293B_0%,#162334_45%,#111C2B_100%)] text-sidebar-foreground shadow-[0_20px_50px_-28px_rgba(15,23,42,0.9)] lg:rounded-2xl",
+      className
+    )}>
       {/* Logo */}
       <div className="flex items-center px-5 py-5 border-b border-sidebar-border/70">
         <div className="flex items-center gap-3">
@@ -183,6 +194,11 @@ export default function Sidebar() {
                 <Link
                   key={item.href}
                   to={item.href}
+                  onClick={() => {
+                    if (window.innerWidth < 1024) {
+                      onNavigate?.();
+                    }
+                  }}
                   className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-200 ${
                     isItemActive(item.href)
                       ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-[inset_0_0_0_1px_rgba(248,250,252,0.08)]'
@@ -202,7 +218,7 @@ export default function Sidebar() {
       <div className="border-t border-sidebar-border/70 p-4">
         <div className="text-xs text-sidebar-foreground/65">
           <p className="font-semibold text-sidebar-foreground">Motorepuestos POS</p>
-          <p>v1.0.0</p>
+          <p>{state.sidebarOpen ? 'v1.0.0' : 'v1.0.0'}</p>
         </div>
       </div>
     </aside>
