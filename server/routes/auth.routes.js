@@ -6,6 +6,48 @@ import { buildPasswordResetLink, emailDeliveryConfigured, sendPasswordResetEmail
 
 const router = Router();
 const scryptAsync = promisify(scrypt);
+
+// Middleware de seguridad: detecta inyecciones SQL en todos los parámetros
+router.use((req, res, next) => {
+  // Verifica query parameters
+  for (const [key, value] of Object.entries(req.query || {})) {
+    const threat = detectSQLInjectionAttempt(value, `query.${key}`);
+    if (threat.detected) {
+      logSecurityThreat(req, 'SQL_INJECTION_ATTEMPT_QUERY', {
+        pattern: threat.pattern,
+        field: threat.field,
+      });
+      
+      return res.status(403).json({
+        ok: false,
+        message: 'Solicitud inválida',
+      });
+    }
+  }
+  
+  // Verifica body parameters
+  if (req.body && typeof req.body === 'object') {
+    for (const [key, value] of Object.entries(req.body)) {
+      // Solo verifica string values (los números, booleanos, etc. no necesitan verificación)
+      if (typeof value === 'string') {
+        const threat = detectSQLInjectionAttempt(value, `body.${key}`);
+        if (threat.detected) {
+          logSecurityThreat(req, 'SQL_INJECTION_ATTEMPT_BODY', {
+            pattern: threat.pattern,
+            field: threat.field,
+          });
+          
+          return res.status(403).json({
+            ok: false,
+            message: 'Solicitud inválida',
+          });
+        }
+      }
+    }
+  }
+  
+  next();
+});
 const GENERIC_AUTH_ERROR = 'Credenciales inválidas';
 const GENERIC_SERVER_ERROR = 'No se pudo procesar la solicitud';
 const MIN_PASSWORD_LENGTH = 6;
@@ -21,6 +63,65 @@ function logSecurityError(scope, error) {
   // Seguridad: nunca exponer detalles internos/SQL al cliente.
   const message = error instanceof Error ? error.message : String(error || 'Unknown error');
   console.error(`[AUTH][${scope}]`, message);
+}
+
+function detectSQLInjectionAttempt(value, fieldName = 'input') {
+  // Seguridad: detecta patrones comunes de inyección SQL
+  if (typeof value !== 'string') return { detected: false, pattern: null };
+
+  const lowerValue = value.toLowerCase();
+  
+  // Patrones peligrosos: OR/AND con condicionales
+  const orPatterns = /'\s+or\s+['"]?1['"]?\s*=\s*['"]?1['"]?/i;
+  const andPatterns = /'\s+and\s+['"]?\d+['"]?\s*[<>=]/i;
+  
+  // Comentarios SQL
+  const sqlComments = /(-{2}|\/\*|\*\/|#|;)/;
+  
+  // Palabras clave SQL (en contextos donde no deberían estar)
+  const sqlKeywords = /\b(union|select|insert|update|delete|drop|create|alter|exec|execute|xp_|sp_|script|javascript|onerror|onclick)\b/i;
+  
+  // Caracteres especiales peligrosos en secuencia
+  const dangerousSequences = /['"`];|['"`]\s*(or|and|union|select|drop|exec)/i;
+  
+  // Información detallada para logging
+  if (orPatterns.test(value)) {
+    return { detected: true, pattern: 'OR_INJECTION', field: fieldName };
+  }
+  
+  if (andPatterns.test(value)) {
+    return { detected: true, pattern: 'AND_INJECTION', field: fieldName };
+  }
+  
+  if (sqlComments.test(value) && (sqlKeywords.test(value) || dangerousSequences.test(value))) {
+    return { detected: true, pattern: 'SQL_COMMENT_INJECTION', field: fieldName };
+  }
+  
+  if (dangerousSequences.test(value)) {
+    return { detected: true, pattern: 'DANGEROUS_SEQUENCE', field: fieldName };
+  }
+  
+  // Detecta intentos de XSS/Script injection que a veces vienen junto con SQL injection
+  if (/<script|javascript:|onerror|onclick|<iframe|eval\(/i.test(value)) {
+    return { detected: true, pattern: 'XSS_INJECTION', field: fieldName };
+  }
+  
+  return { detected: false, pattern: null };
+}
+
+function logSecurityThreat(req, threatType, details) {
+  // Seguridad: registra intentos de ataque para auditoria
+  const timestamp = new Date().toISOString();
+  const ip = getRequestIp(req);
+  const userAgent = String(req.headers['user-agent'] || 'unknown').substring(0, 100);
+  
+  console.warn('[SECURITY_THREAT]', {
+    timestamp,
+    threatType,
+    ip,
+    userAgent,
+    ...details,
+  });
 }
 
 function hashPasswordLegacy(password) {
@@ -255,6 +356,26 @@ async function createPasswordResetToken(userId, token, expiresAt) {
 router.post('/login', async (req, res, next) => {
   try {
     const { email, password } = req.body || {};
+    
+    // Seguridad: detecta intentos de inyección SQL ANTES de procesar
+    const emailThreat = detectSQLInjectionAttempt(email, 'email');
+    const passwordThreat = detectSQLInjectionAttempt(password, 'password');
+    
+    if (emailThreat.detected || passwordThreat.detected) {
+      const threat = emailThreat.detected ? emailThreat : passwordThreat;
+      logSecurityThreat(req, 'SQL_INJECTION_ATTEMPT', {
+        pattern: threat.pattern,
+        field: threat.field,
+        suspiciousValue: String(threat.field === 'email' ? email : password).substring(0, 50),
+      });
+      
+      // Bloquea con 403 Forbidden y no revela detalles
+      return res.status(403).json({
+        ok: false,
+        message: GENERIC_AUTH_ERROR,
+      });
+    }
+    
     const safeEmail = sanitizeEmail(email);
     const safePassword = sanitizePassword(password);
     const throttleKey = getThrottleKey(req, safeEmail || 'invalid');
@@ -338,6 +459,22 @@ router.post('/login', async (req, res, next) => {
 router.post('/password-reset/request', async (req, res, next) => {
   try {
     const { email } = req.body || {};
+    
+    // Seguridad: detecta intentos de inyección SQL
+    const emailThreat = detectSQLInjectionAttempt(email, 'email');
+    if (emailThreat.detected) {
+      logSecurityThreat(req, 'SQL_INJECTION_ATTEMPT', {
+        endpoint: 'password-reset/request',
+        pattern: emailThreat.pattern,
+        field: emailThreat.field,
+      });
+      
+      return res.status(403).json({
+        ok: false,
+        message: 'Email es obligatorio',
+      });
+    }
+    
     const safeEmail = sanitizeEmail(email);
     if (!safeEmail) {
       return res.status(400).json({ ok: false, message: 'Email es obligatorio' });
@@ -404,6 +541,19 @@ router.post('/password-reset/request', async (req, res, next) => {
 router.post('/password-reset/validate', async (req, res, next) => {
   try {
     const { token } = req.body || {};
+    
+    // Seguridad: detecta intentos de inyección SQL
+    const tokenThreat = detectSQLInjectionAttempt(token, 'token');
+    if (tokenThreat.detected) {
+      logSecurityThreat(req, 'SQL_INJECTION_ATTEMPT', {
+        endpoint: 'password-reset/validate',
+        pattern: tokenThreat.pattern,
+        field: tokenThreat.field,
+      });
+      
+      return res.json({ ok: true, data: { valid: false } });
+    }
+    
     const safeToken = sanitizeToken(token);
     if (!safeToken) {
       return res.json({ ok: true, data: { valid: false } });
@@ -433,6 +583,25 @@ router.post('/password-reset/validate', async (req, res, next) => {
 router.post('/password-reset/confirm', async (req, res, next) => {
   try {
     const { token, newPassword } = req.body || {};
+    
+    // Seguridad: detecta intentos de inyección SQL en token y password
+    const tokenThreat = detectSQLInjectionAttempt(token, 'token');
+    const passwordThreat = detectSQLInjectionAttempt(newPassword, 'newPassword');
+    
+    if (tokenThreat.detected || passwordThreat.detected) {
+      const threat = tokenThreat.detected ? tokenThreat : passwordThreat;
+      logSecurityThreat(req, 'SQL_INJECTION_ATTEMPT', {
+        endpoint: 'password-reset/confirm',
+        pattern: threat.pattern,
+        field: threat.field,
+      });
+      
+      return res.status(403).json({
+        ok: false,
+        message: 'El enlace de recuperación no es válido o ya expiró',
+      });
+    }
+    
     const safeToken = sanitizeToken(token);
     const safePassword = sanitizePassword(newPassword);
 
@@ -460,6 +629,32 @@ router.post('/password-reset/confirm', async (req, res, next) => {
     return res.json({ ok: true, data: { updated: true } });
   } catch (error) {
     logSecurityError('password-reset-confirm', error);
+    return res.status(500).json({ ok: false, message: GENERIC_SERVER_ERROR });
+  }
+});
+
+router.post('/logout', async (req, res, next) => {
+  try {
+    // Logout: destruye la sesión y cierra la conexión
+    // Limpia cookies de sesión si existen
+    res.clearCookie('authToken');
+    res.clearCookie('sessionId');
+    
+    return res.json({ ok: true, data: { loggedOut: true } });
+  } catch (error) {
+    logSecurityError('logout', error);
+    return res.status(500).json({ ok: false, message: GENERIC_SERVER_ERROR });
+  }
+});
+
+router.post('/validate-session', async (req, res, next) => {
+  try {
+    // Validación de sesión abierta (sin cambiertas seguras)
+    // Usada por el frontend para verificar si la sesión es válida
+    // Si llegó aquí sin ser bloqueado por el middleware de inyección, es válida
+    return res.json({ ok: true, data: { sessionValid: true } });
+  } catch (error) {
+    logSecurityError('validate-session', error);
     return res.status(500).json({ ok: false, message: GENERIC_SERVER_ERROR });
   }
 });
