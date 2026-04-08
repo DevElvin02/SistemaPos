@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { AlertTriangle, PackageX, TrendingUp } from 'lucide-react';
+import { AlertTriangle, BellRing, PackageX, TrendingUp } from 'lucide-react';
 import { useAdmin } from '@/context/AdminContext';
+import { buildAdminNotifications, formatNotificationTime } from '@/lib/admin-notifications';
 
 export default function Alerts() {
   const { state } = useAdmin();
@@ -38,11 +39,20 @@ export default function Alerts() {
     };
   }, [state.orders]);
 
+  const notifications = useMemo(
+    () => buildAdminNotifications({
+      inventory: state.inventory,
+      orders: state.orders,
+      cashSessions: state.cashSessions,
+    }),
+    [state.cashSessions, state.inventory, state.orders]
+  );
+
   return (
     <div className="p-8 space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Alertas</h1>
-        <p className="text-muted-foreground mt-1">Monitoreo rapido de inventario y ventas del dia</p>
+        <p className="text-muted-foreground mt-1">Monitoreo rapido de inventario, ventas y notificaciones del sistema</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -71,6 +81,32 @@ export default function Alerts() {
           <p className="text-sm text-green-700/80 dark:text-green-300/80">{todaySales.count} ventas</p>
         </div>
       </div>
+
+      <section className="bg-card rounded-lg border border-border overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+          <BellRing className="w-4 h-4 text-primary" />
+          <h2 className="font-semibold">Centro de notificaciones</h2>
+        </div>
+        <div className="p-4">
+          {notifications.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No hay notificaciones activas.</p>
+          ) : (
+            <div className="space-y-3">
+              {notifications.map((item) => (
+                <div key={item.id} className="rounded-md border border-border p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium">{item.title}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{item.message}</p>
+                    </div>
+                    <span className="text-[11px] text-muted-foreground whitespace-nowrap">{formatNotificationTime(item.timestamp)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section className="bg-card rounded-lg border border-border overflow-hidden">

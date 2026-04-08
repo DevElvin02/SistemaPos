@@ -1,16 +1,10 @@
 import { Bell, Settings, LogOut, User, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-
-interface NotificationItem {
-  id: string;
-  title: string;
-  message: string;
-  time: string;
-  unread: boolean;
-}
+import { useAdmin } from '@/context/AdminContext';
+import { buildAdminNotifications, formatNotificationTime } from '@/lib/admin-notifications';
 
 interface FloatingPosition {
   top: number;
@@ -18,42 +12,67 @@ interface FloatingPosition {
   width: number;
 }
 
-const INITIAL_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: '1',
-    title: 'Pedido nuevo',
-    message: 'Se registró una nueva orden en el sistema.',
-    time: 'Hace 3 min',
-    unread: true,
-  },
-  {
-    id: '2',
-    title: 'Stock bajo',
-    message: 'Hay productos con inventario por debajo del mínimo.',
-    time: 'Hace 15 min',
-    unread: true,
-  },
-  {
-    id: '3',
-    title: 'Resumen diario',
-    message: 'El resumen de ventas del día ya está disponible.',
-    time: 'Hace 1 h',
-    unread: false,
-  },
-];
+const READ_NOTIFICATIONS_KEY = 'admin_notifications_read';
 
 export default function Header() {
   const { user, logout, isAuthenticated, hasPermission } = useAuth();
+  const { state } = useAdmin();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
+  const [readNotifications, setReadNotifications] = useState<string[]>([]);
   const [notificationMenuPosition, setNotificationMenuPosition] = useState<FloatingPosition | null>(null);
   const [userMenuPosition, setUserMenuPosition] = useState<FloatingPosition | null>(null);
   const notificationsRef = useRef<HTMLDivElement | null>(null);
   const notificationsMenuRef = useRef<HTMLDivElement | null>(null);
   const userRef = useRef<HTMLDivElement | null>(null);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(READ_NOTIFICATIONS_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        setReadNotifications(parsed.filter((value): value is string => typeof value === 'string'));
+      }
+    } catch {
+      localStorage.removeItem(READ_NOTIFICATIONS_KEY);
+    }
+  }, []);
+
+  const derivedNotifications = useMemo(
+    () => buildAdminNotifications({
+      inventory: state.inventory,
+      orders: state.orders,
+      cashSessions: state.cashSessions,
+    }),
+    [state.cashSessions, state.inventory, state.orders]
+  );
+
+  useEffect(() => {
+    const activeIds = new Set(derivedNotifications.map((item) => item.id));
+    setReadNotifications((prev) => {
+      const next = prev.filter((id) => activeIds.has(id));
+      if (next.length !== prev.length) {
+        localStorage.setItem(READ_NOTIFICATIONS_KEY, JSON.stringify(next));
+      }
+      return next;
+    });
+  }, [derivedNotifications]);
+
+  useEffect(() => {
+    localStorage.setItem(READ_NOTIFICATIONS_KEY, JSON.stringify(readNotifications));
+  }, [readNotifications]);
+
+  const notifications = useMemo(
+    () => derivedNotifications.map((item) => ({
+      ...item,
+      time: formatNotificationTime(item.timestamp),
+      unread: !readNotifications.includes(item.id),
+    })),
+    [derivedNotifications, readNotifications]
+  );
 
   const unreadCount = notifications.filter((item) => item.unread).length;
 
@@ -134,13 +153,17 @@ export default function Header() {
   };
 
   const markAllAsRead = () => {
-    setNotifications((prev) => prev.map((item) => ({ ...item, unread: false })));
+    setReadNotifications(notifications.map((item) => item.id));
   };
 
   const markAsRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, unread: false } : item))
-    );
+    setReadNotifications((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  };
+
+  const handleNotificationClick = (id: string, href: string) => {
+    markAsRead(id);
+    setNotificationsOpen(false);
+    navigate(href);
   };
 
   const handleLogout = () => {
@@ -168,7 +191,7 @@ export default function Header() {
   return (
     <header className="relative z-[70] shrink-0 overflow-visible bg-white/85 border-b border-border/70 px-6 py-4 flex items-center justify-between backdrop-blur-md">
       <div className="flex items-center gap-4">
-        <h2 className="text-3xl font-bold tracking-tight text-secondary">Sublimart <span className="text-primary">POS</span></h2>
+        <h2 className="text-3xl font-bold tracking-tight text-secondary">Motorepuestos <span className="text-primary">POS</span></h2>
       </div>
 
       <div className="flex items-center gap-4">
@@ -199,7 +222,6 @@ export default function Header() {
 
         <div className="h-8 w-px bg-border" />
 
-        {/* User Dropdown */}
         <div className="relative" ref={userRef}>
           <button
             onClick={() => {
@@ -242,19 +264,25 @@ export default function Header() {
         >
           <div className="px-4 py-3 border-b border-border flex items-center justify-between">
             <p className="text-sm font-semibold text-foreground">Notificaciones</p>
-            <button
-              onClick={markAllAsRead}
-              className="text-xs text-primary hover:underline"
-            >
-              Marcar todo leído
-            </button>
+            {notifications.length > 0 && (
+              <button
+                onClick={markAllAsRead}
+                className="text-xs text-primary hover:underline"
+              >
+                Marcar todo leido
+              </button>
+            )}
           </div>
 
           <div className="max-h-72 overflow-y-auto bg-card">
-            {notifications.map((item) => (
+            {notifications.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-muted-foreground">
+                No hay notificaciones activas por ahora.
+              </div>
+            ) : notifications.map((item) => (
               <button
                 key={item.id}
-                onClick={() => markAsRead(item.id)}
+                onClick={() => handleNotificationClick(item.id, item.href)}
                 className="w-full text-left px-4 py-3 border-b last:border-b-0 border-border hover:bg-muted/50 transition"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -284,7 +312,7 @@ export default function Header() {
           <div className="px-4 py-3 border-b border-border">
             <div className="text-sm font-medium text-foreground">{user.email}</div>
             <div className="text-xs text-muted-foreground mt-1">
-              Último acceso: {user.ultimoLogin ? new Date(user.ultimoLogin).toLocaleDateString('es-ES') : 'N/A'}
+              Ultimo acceso: {user.ultimoLogin ? new Date(user.ultimoLogin).toLocaleDateString('es-ES') : 'N/A'}
             </div>
           </div>
           <button
@@ -292,7 +320,7 @@ export default function Header() {
             className="w-full flex items-center gap-3 px-4 py-2 text-sm text-foreground hover:bg-muted transition text-left"
           >
             <LogOut className="w-4 h-4" />
-            Cerrar sesión
+            Cerrar sesion
           </button>
         </div>,
         document.body
