@@ -14,7 +14,7 @@ export default function Login() {
   const [resetEmail, setResetEmail] = useState('');
   const [resetMessage, setResetMessage] = useState('');
   const [resetToken, setResetToken] = useState('');
-  const { login, requestPasswordReset } = useAuth();
+  const { login, requestPasswordReset, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const resetLink = useMemo(() => {
     if (!resetToken) return '';
@@ -35,6 +35,12 @@ export default function Login() {
     }
   }, []);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -50,7 +56,6 @@ export default function Login() {
         localStorage.removeItem('login_remember');
       }
       
-      navigate('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
     } finally {
