@@ -18,6 +18,7 @@ export default function Login() {
   const [desktopCoverReady, setDesktopCoverReady] = useState(false);
   const { login, requestPasswordReset, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const loginCoverSrc = `${import.meta.env.BASE_URL}login-cover.jpg`;
   const resetLink = useMemo(() => {
     if (!resetToken) return '';
     return `${window.location.origin}/reset-password?token=${encodeURIComponent(resetToken)}`;
@@ -98,7 +99,7 @@ export default function Login() {
           <div className="relative h-52 overflow-hidden border-b border-white/10 lg:hidden">
             {!mobileCoverReady && <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-[#2a0f18] to-[#3a131f]" />}
             <img
-              src="/login-cover.jpg"
+              src={loginCoverSrc}
               alt="Imagen de portada del sistema"
               loading="lazy"
               decoding="async"
@@ -264,7 +265,7 @@ export default function Login() {
           <aside className="relative hidden min-h-[620px] overflow-hidden border-l border-white/10 lg:block">
             {!desktopCoverReady && <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#211018] via-[#1a0b12] to-[#350b13]" />}
             <img
-              src="/login-cover.jpg"
+              src={loginCoverSrc}
               alt="Imagen de apoyo para el acceso"
               loading="lazy"
               decoding="async"
