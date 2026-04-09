@@ -14,13 +14,13 @@ services:
       - key: DB_HOST
         sync: false
       - key: DB_PORT
-        value: 4000
+        sync: false
       - key: DB_USER
         sync: false
       - key: DB_PASSWORD
         sync: false
       - key: DB_NAME
-        value: sublimart
+        sync: false
       - key: DB_SSL
         value: true
       - key: DB_SSL_CA_PATH
