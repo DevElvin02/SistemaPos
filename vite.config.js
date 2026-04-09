@@ -23,5 +23,35 @@ export default defineConfig({
     build: {
         target: 'es2020',
         minify: 'terser',
+        // Performance: divide dependencias grandes en chunks cacheables para reducir costo inicial.
+        rollupOptions: {
+            output: {
+                manualChunks: function (id) {
+                    if (!id.includes('node_modules'))
+                        return;
+                    if (id.includes('recharts'))
+                        return 'vendor-charts';
+                    if (id.includes('jspdf'))
+                        return 'vendor-jspdf';
+                    if (id.includes('html2canvas'))
+                        return 'vendor-html2canvas';
+                    if (id.includes('/react/') || id.includes('react-dom') || id.includes('scheduler'))
+                        return 'vendor-react-core';
+                    if (id.includes('react-router-dom'))
+                        return 'vendor-router';
+                    if (id.includes('@radix-ui'))
+                        return 'vendor-radix';
+                    if (id.includes('lucide-react'))
+                        return 'vendor-icons';
+                    if (id.includes('react-hook-form') || id.includes('zod'))
+                        return 'vendor-forms';
+                    if (id.includes('date-fns'))
+                        return 'vendor-date';
+                    if (id.includes('sonner'))
+                        return 'vendor-toast';
+                    return 'vendor';
+                },
+            },
+        },
     },
 });

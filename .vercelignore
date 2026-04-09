@@ -1,0 +1,15 @@
+.git/
+.vercel/
+node_modules/
+dist/
+release/
+release-build/
+electron/
+server/
+certs/
+build/
+*.log
+.env
+.env.local
+.env.*.local
+server/backups/

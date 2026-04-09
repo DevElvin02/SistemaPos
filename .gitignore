@@ -34,3 +34,5 @@ server/backups/
 
 # Dependencies
 node_modules/
+
+.vercel
