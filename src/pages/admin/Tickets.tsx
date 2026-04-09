@@ -31,7 +31,7 @@ export default function Tickets() {
 
   const getCustomerEmail = (order: Order) => {
     const customer = state.customers.find((c) => c.id === order.customerId)
-    return customer?.email || 'cliente@sublimart.com'
+    return customer?.email || 'cliente@motorepuestos.com'
   }
 
   const getInvoiceData = (order: Order) => ({
@@ -66,9 +66,9 @@ export default function Tickets() {
     }
   }
 
-  const handleDownloadPDF = (order: Order) => {
+  const handleDownloadPDF = async (order: Order) => {
     try {
-      generateTicketPDF(getInvoiceData(order), `Ticket-${order.orderNumber}.pdf`)
+      await generateTicketPDF(getInvoiceData(order), `Ticket-${order.orderNumber}.pdf`)
       toast.success(`PDF generado para ${order.orderNumber}`)
     } catch {
       toast.error('No se pudo generar el PDF')

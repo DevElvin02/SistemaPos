@@ -23,7 +23,7 @@ export async function sendPasswordResetEmail({ to, name, token }) {
   }
 
   const resetLink = buildPasswordResetLink(token);
-  const appName = process.env.APP_NAME || 'Sublimart';
+  const appName = process.env.APP_NAME || 'Motorepuestos';
   const subject = `${appName} - Recuperacion de contrasena`;
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#0f172a;">

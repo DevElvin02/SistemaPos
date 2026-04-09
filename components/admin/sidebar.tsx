@@ -155,7 +155,7 @@ export default function Sidebar({ isOpen }: SidebarProps) {
         {isOpen && (
           <div className="text-xs text-slate-400">
             <p className="font-semibold">Motorepuestos Admin</p>
-            <p>v1.0.0</p>
+            <p>v0.1.2</p>
           </div>
         )}
       </div>

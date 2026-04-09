@@ -206,7 +206,7 @@ export async function bootstrapSchema() {
   await dbPool.query(
     `INSERT IGNORE INTO system_settings
       (id, company_name, email, phone, address, country, timezone, two_factor_enabled, last_backup_at)
-     VALUES (1, 'SUBLIMART', 'info@sublimart.com', '+1 (555) 123-4567', 'Calle Principal 123, Ciudad', 'Colombia', 'America/Bogota', 0, NULL)`
+     VALUES (1, 'Motorepuestos', 'info@motorepuestos.com', '+503 0000-0000', 'Direccion principal', 'El Salvador', 'America/El_Salvador', 0, NULL)`
   );
 
   if (await tableExists('customers')) {

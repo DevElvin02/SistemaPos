@@ -6,7 +6,7 @@ const router = Router();
 router.get('/', async (req, res, next) => {
   try {
     await pingDatabase();
-    res.json({ ok: true, service: 'sublimart-api', db: 'connected' });
+    res.json({ ok: true, service: 'motorepuestos-api', db: 'connected' });
   } catch (error) {
     next(error);
   }

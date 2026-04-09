@@ -72,7 +72,7 @@ export default function Orders() {
 
   const getCustomerEmail = (order: Order) => {
     const customer = state.customers.find((c) => c.id === order.customerId);
-    return customer?.email || 'cliente@sublimart.com';
+    return customer?.email || 'cliente@motorepuestos.com';
   };
 
   const getInvoiceData = (order: Order) => ({

@@ -12,10 +12,11 @@ export interface InvoiceData {
 
 export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
   const { order, customerName, customerEmail, companyName, companyAddress } = invoiceData
-  
-  const taxRate = 0.12
-  const taxAmount = order.amount * taxRate
-  const totalAmount = order.amount + taxAmount
+
+  const taxRate = 0.13
+  const subtotal = order.amount / (1 + taxRate)
+  const taxAmount = order.amount - subtotal
+  const totalAmount = order.amount
 
   return `
     <!DOCTYPE html>
@@ -163,7 +164,7 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
       <div class="invoice-container">
         <div class="header">
           <div class="company-info">
-            <h1>SUBLIMART</h1>
+            <h1>MOTO REPUESTOS</h1>
             <p>${companyAddress}</p>
             <p>NIT: 123456789-0</p>
           </div>
@@ -200,8 +201,8 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
             <tr>
               <td>Venta de Productos</td>
               <td style="text-align: right;">1</td>
-              <td style="text-align: right;">$${(order.amount / 1.12).toFixed(2)}</td>
-              <td style="text-align: right;">$${(order.amount / 1.12).toFixed(2)}</td>
+              <td style="text-align: right;">$${subtotal.toFixed(2)}</td>
+              <td style="text-align: right;">$${subtotal.toFixed(2)}</td>
             </tr>
           </tbody>
         </table>
@@ -210,10 +211,10 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
           <table class="summary-table">
             <tr>
               <td>Subtotal:</td>
-              <td>$${(order.amount / 1.12).toFixed(2)}</td>
+              <td>$${subtotal.toFixed(2)}</td>
             </tr>
             <tr>
-              <td>IVA (12%):</td>
+              <td>IVA (13%):</td>
               <td>$${taxAmount.toFixed(2)}</td>
             </tr>
             <tr class="total-row">
@@ -235,10 +236,11 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
 
 export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
   const { order, customerName, companyName } = invoiceData
-  
-  const taxRate = 0.12
-  const taxAmount = order.amount * taxRate
-  const totalAmount = order.amount + taxAmount
+
+  const taxRate = 0.13
+  const subtotal = order.amount / (1 + taxRate)
+  const taxAmount = order.amount - subtotal
+  const totalAmount = order.amount
 
   return `
     <!DOCTYPE html>
@@ -356,7 +358,7 @@ export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
     <body>
       <div class="receipt-container">
         <div class="receipt-header">
-          <h1>SUBLIMART</h1>
+          <h1>MOTO REPUESTOS</h1>
           <p>Sistema de Ventas</p>
           <p>NIT: 123456789-0</p>
         </div>
@@ -386,7 +388,7 @@ export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
           <div style="border-bottom: 1px solid #ddd; margin: 5px 0;"></div>
           <div class="item-row">
             <div class="item-desc">Venta de Productos</div>
-            <div class="item-price">$${(order.amount / 1.12).toFixed(2)}</div>
+            <div class="item-price">$${subtotal.toFixed(2)}</div>
           </div>
         </div>
 
@@ -395,10 +397,10 @@ export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
         <div class="totals">
           <div class="total-row">
             <span>Subtotal:</span>
-            <span>$${(order.amount / 1.12).toFixed(2)}</span>
+            <span>$${subtotal.toFixed(2)}</span>
           </div>
           <div class="total-row">
-            <span>IVA (12%):</span>
+            <span>IVA (13%):</span>
             <span>$${taxAmount.toFixed(2)}</span>
           </div>
         </div>

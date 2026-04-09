@@ -5,10 +5,12 @@ import path from 'node:path';
 
 function loadEnvironment() {
   const candidatePaths = [
+    process.env.MOTOREPUESTOS_ENV_PATH,
     process.env.SUBLIMART_ENV_PATH,
     path.join(process.cwd(), '.env'),
     path.join(path.dirname(process.execPath || ''), '.env'),
     process.resourcesPath ? path.join(process.resourcesPath, '.env') : null,
+    process.env.ProgramData ? path.join(process.env.ProgramData, 'Motorepuestos', '.env') : null,
     process.env.ProgramData ? path.join(process.env.ProgramData, 'Sublimart', '.env') : null,
     path.join(path.dirname(process.cwd()), '.env'),
   ].filter(Boolean);
@@ -51,7 +53,7 @@ const required = ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_NAME'];
 for (const key of required) {
   if (!process.env[key]) {
     throw new Error(
-      `Missing environment variable: ${key}. Coloca un archivo .env valido en la carpeta de ejecucion, junto al .exe o en %ProgramData%\\Sublimart\\.env`
+      `Missing environment variable: ${key}. Coloca un archivo .env valido en la carpeta de ejecucion, junto al .exe o en %ProgramData%\\Motorepuestos\\.env`
     );
   }
 }

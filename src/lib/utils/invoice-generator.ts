@@ -14,10 +14,12 @@ export interface InvoiceData {
 
 export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
   const { order, customerName, customerEmail, companyName, companyAddress, companyEmail, companyPhone, companyCountry } = invoiceData
-  
-  const taxRate = 0.12
-  const taxAmount = order.amount * taxRate
-  const totalAmount = order.amount + taxAmount
+
+  // Performance/maintainability: evita porcentajes quemados y mantiene consistencia fiscal.
+  const taxRate = 0.13
+  const subtotal = order.amount / (1 + taxRate)
+  const taxAmount = order.amount - subtotal
+  const totalAmount = order.amount
 
   return `
     <!DOCTYPE html>
@@ -205,8 +207,8 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
             <tr>
               <td>Venta de Productos</td>
               <td style="text-align: right;">1</td>
-              <td style="text-align: right;">$${(order.amount / 1.12).toFixed(2)}</td>
-              <td style="text-align: right;">$${(order.amount / 1.12).toFixed(2)}</td>
+              <td style="text-align: right;">$${subtotal.toFixed(2)}</td>
+              <td style="text-align: right;">$${subtotal.toFixed(2)}</td>
             </tr>
           </tbody>
         </table>
@@ -215,10 +217,10 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
           <table class="summary-table">
             <tr>
               <td>Subtotal:</td>
-              <td>$${(order.amount / 1.12).toFixed(2)}</td>
+              <td>$${subtotal.toFixed(2)}</td>
             </tr>
             <tr>
-              <td>IVA (12%):</td>
+              <td>IVA (13%):</td>
               <td>$${taxAmount.toFixed(2)}</td>
             </tr>
             <tr class="total-row">
@@ -229,7 +231,7 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
         </div>
 
         <div class="footer">
-          <p>Gracias por su compra • www.sublimart.com</p>
+          <p>Gracias por su compra • Motorepuestos</p>
           <p style="margin-top: 10px; font-size: 11px;">Este documento fue generado automáticamente y es válido sin firma digital.</p>
         </div>
       </div>
@@ -240,10 +242,11 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
 
 export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
   const { order, customerName, companyName, companyAddress, companyEmail, companyPhone, companyCountry } = invoiceData
-  
-  const taxRate = 0.12
-  const taxAmount = order.amount * taxRate
-  const totalAmount = order.amount + taxAmount
+
+  const taxRate = 0.13
+  const subtotal = order.amount / (1 + taxRate)
+  const taxAmount = order.amount - subtotal
+  const totalAmount = order.amount
 
   return `
     <!DOCTYPE html>
@@ -395,7 +398,7 @@ export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
           <div style="border-bottom: 1px solid #ddd; margin: 5px 0;"></div>
           <div class="item-row">
             <div class="item-desc">Venta de Productos</div>
-            <div class="item-price">$${(order.amount / 1.12).toFixed(2)}</div>
+            <div class="item-price">$${subtotal.toFixed(2)}</div>
           </div>
         </div>
 
@@ -404,10 +407,10 @@ export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
         <div class="totals">
           <div class="total-row">
             <span>Subtotal:</span>
-            <span>$${(order.amount / 1.12).toFixed(2)}</span>
+            <span>$${subtotal.toFixed(2)}</span>
           </div>
           <div class="total-row">
-            <span>IVA (12%):</span>
+            <span>IVA (13%):</span>
             <span>$${taxAmount.toFixed(2)}</span>
           </div>
         </div>
@@ -419,7 +422,7 @@ export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
 
         <div class="footer">
           <p>Gracias por su compra</p>
-          <p style="margin-top: 5px;">www.sublimart.com</p>
+          <p style="margin-top: 5px;">Motorepuestos</p>
         </div>
       </div>
     </body>
@@ -485,7 +488,8 @@ export const generateTicketPDF = async (invoiceData: InvoiceData, filename: stri
     format: [80, 180],
   })
 
-  const baseAmount = order.amount / 1.12
+  const taxRate = 0.13
+  const baseAmount = order.amount / (1 + taxRate)
   const taxAmount = order.amount - baseAmount
   const totalAmount = order.amount
   const formatCurrency = (value: number) => `$${value.toFixed(2)}`
@@ -493,7 +497,7 @@ export const generateTicketPDF = async (invoiceData: InvoiceData, filename: stri
   let y = 10
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(12)
-  doc.text(companyName || 'SUBLIMART', 40, y, { align: 'center' })
+  doc.text(companyName || 'MOTOREPUESTOS', 40, y, { align: 'center' })
 
   y += 5
   doc.setFont('helvetica', 'normal')
@@ -536,7 +540,7 @@ export const generateTicketPDF = async (invoiceData: InvoiceData, filename: stri
   doc.text(formatCurrency(baseAmount), 75, y, { align: 'right' })
 
   y += 5
-  doc.text('IVA (12%)', 5, y)
+  doc.text('IVA (13%)', 5, y)
   doc.text(formatCurrency(taxAmount), 75, y, { align: 'right' })
 
   y += 5

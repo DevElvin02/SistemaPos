@@ -32,7 +32,7 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder }: Orde
         order,
         customerName,
         customerEmail,
-        companyName: 'SUBLIMART',
+        companyName: 'MOTO REPUESTOS',
         companyAddress: 'Calle Principal 123, Ciudad',
         invoiceDate: new Date().toLocaleDateString('es-ES'),
       })
@@ -53,7 +53,7 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder }: Orde
         order,
         customerName,
         customerEmail,
-        companyName: 'SUBLIMART',
+        companyName: 'MOTO REPUESTOS',
         companyAddress: 'Calle Principal 123, Ciudad',
         invoiceDate: new Date().toLocaleDateString('es-ES'),
       })

@@ -220,7 +220,7 @@ export default function Sidebar({ className, onNavigate }: SidebarProps) {
       <div className="border-t border-sidebar-border/70 p-4">
         <div className="text-xs text-sidebar-foreground/65">
           <p className="font-semibold text-sidebar-foreground">Motorepuestos POS</p>
-          <p>{state.sidebarOpen ? 'v1.0.0' : 'v1.0.0'}</p>
+          <p>{state.sidebarOpen ? 'v0.1.2' : 'v0.1.2'}</p>
         </div>
       </div>
     </aside>

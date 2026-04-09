@@ -60,13 +60,13 @@ app.get('/', (req, res) => {
     return res.sendFile(path.join(distPath, 'index.html'));
   }
 
-  res.json({ ok: true, message: 'Sublimart API running' });
+  res.json({ ok: true, message: 'Motorepuestos API running' });
 });
 
 app.get('/api', (req, res) => {
   res.json({
     ok: true,
-    message: 'Sublimart API endpoint base',
+    message: 'Motorepuestos API endpoint base',
     health: '/api/health',
   });
 });

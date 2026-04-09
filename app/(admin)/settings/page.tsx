@@ -166,7 +166,7 @@ export default function SettingsPage() {
         <div className="space-y-4">
           <div className="flex justify-between items-center py-3 border-b border-slate-200">
             <span className="text-slate-600">System Version</span>
-            <span className="font-medium text-slate-900">v1.0.0</span>
+            <span className="font-medium text-slate-900">v0.1.2</span>
           </div>
           <div className="flex justify-between items-center py-3 border-b border-slate-200">
             <span className="text-slate-600">Last Updated</span>
