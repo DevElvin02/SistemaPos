@@ -117,14 +117,14 @@ export default function Orders() {
     }
   };
 
-  const handleGeneratePdf = (order: Order) => {
+  const handleGeneratePdf = async (order: Order) => {
     if (order.status === 'cancelled') {
       toast.error('No se puede generar PDF de una venta cancelada');
       return;
     }
 
     try {
-      generateTicketPDF(getInvoiceData(order), `Ticket-${order.orderNumber}.pdf`);
+      await generateTicketPDF(getInvoiceData(order), `Ticket-${order.orderNumber}.pdf`);
       toast.success(`PDF generado para ${order.orderNumber}`);
     } catch {
       toast.error('No se pudo generar el PDF');

@@ -1,5 +1,4 @@
 import { Order } from '../data/orders'
-import { jsPDF } from 'jspdf'
 
 export interface InvoiceData {
   order: Order
@@ -476,7 +475,9 @@ export const printDocument = (html: string) => {
   iframe.srcdoc = html
 }
 
-export const generateTicketPDF = (invoiceData: InvoiceData, filename: string) => {
+export const generateTicketPDF = async (invoiceData: InvoiceData, filename: string) => {
+  // Performance: carga jspdf bajo demanda para no penalizar la carga inicial de la ruta de ventas.
+  const { jsPDF } = await import('jspdf')
   const { order, customerName, companyName, companyAddress, companyPhone, companyEmail, companyCountry } = invoiceData
   const doc = new jsPDF({
     orientation: 'portrait',
