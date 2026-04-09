@@ -173,53 +173,101 @@ export default function AdminDataBootstrap() {
     if (loadedRef.current) return;
     loadedRef.current = true;
 
-    Promise.all([
-      safeRequest('/products'),
-      safeRequest('/customers'),
-      safeRequest('/categories'),
-      safeRequest('/suppliers'),
-      safeRequest('/inventory'),
-      safeRequest('/inventory/movements'),
-      safeRequest('/sales'),
-      safeRequest('/purchases'),
-      safeRequest('/cash/sessions'),
-      safeRequest('/cash/movements'),
-    ])
-      .then(([products, customers, categories, suppliers, inventory, kardex, orders, purchases, sessions, movements]) => {
-        const cashMovementsBySession = new Map<string, CashMovement[]>();
-        for (const row of movements) {
-          const sessionId = String(row.cash_session_id ?? '');
-          const items = cashMovementsBySession.get(sessionId) ?? [];
-          items.push(mapCashMovement(row));
-          cashMovementsBySession.set(sessionId, items);
+    let cancelled = false;
+    let idleHandle: number | null = null;
+    const runtime = globalThis as {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+      setTimeout: typeof setTimeout;
+      clearTimeout: typeof clearTimeout;
+    };
+
+    const loadCriticalData = async () => {
+      // Performance: carga prioritaria para pintar dashboard y vistas esenciales.
+      const [products, customers, inventory, orders, sessions, movements] = await Promise.all([
+        safeRequest('/products'),
+        safeRequest('/customers'),
+        safeRequest('/inventory'),
+        safeRequest('/sales'),
+        safeRequest('/cash/sessions'),
+        safeRequest('/cash/movements'),
+      ]);
+
+      if (cancelled) return;
+
+      const cashMovementsBySession = new Map<string, CashMovement[]>();
+      for (const row of movements) {
+        const sessionId = String(row.cash_session_id ?? '');
+        const items = cashMovementsBySession.get(sessionId) ?? [];
+        items.push(mapCashMovement(row));
+        cashMovementsBySession.set(sessionId, items);
+      }
+
+      const cashSessions: CashSession[] = sessions.map((row) => ({
+        id: String(row.id),
+        sessionNumber: String(row.session_number ?? ''),
+        openedBy: String(row.opened_by ?? ''),
+        closedBy: row.closed_by ? String(row.closed_by) : undefined,
+        openingAmount: Number(row.opening_amount ?? 0),
+        openedAt: row.opened_at ? new Date(String(row.opened_at)) : new Date(),
+        closedAt: row.closed_at ? new Date(String(row.closed_at)) : undefined,
+        movements: cashMovementsBySession.get(String(row.id)) ?? [],
+        notes: row.notes ? String(row.notes) : undefined,
+        status: (row.status as CashSession['status']) ?? 'closed',
+      }));
+
+      dispatch({ type: 'SET_PRODUCTS', payload: products.map(mapProduct) });
+      dispatch({ type: 'SET_CUSTOMERS', payload: customers.map(mapCustomer) });
+      dispatch({ type: 'SET_INVENTORY', payload: inventory.map(mapInventory) });
+      dispatch({ type: 'SET_ORDERS', payload: orders.map(mapOrder) });
+      dispatch({ type: 'SET_CASH_SESSIONS', payload: cashSessions });
+    };
+
+    const loadDeferredData = async () => {
+      // Performance: datos secundarios diferidos para reducir peticiones iniciales.
+      const [categories, suppliers, kardex, purchases] = await Promise.all([
+        safeRequest('/categories'),
+        safeRequest('/suppliers'),
+        safeRequest('/inventory/movements'),
+        safeRequest('/purchases'),
+      ]);
+
+      if (cancelled) return;
+
+      dispatch({ type: 'SET_CATEGORIES', payload: categories.map(mapCategory) });
+      dispatch({ type: 'SET_SUPPLIERS', payload: suppliers.map(mapSupplier) });
+      dispatch({ type: 'SET_KARDEX', payload: kardex.map(mapKardex) });
+      dispatch({ type: 'SET_PURCHASES', payload: purchases.map(mapPurchase) });
+    };
+
+    loadCriticalData()
+      .then(() => {
+        const runDeferred = () => {
+          void loadDeferredData();
+        };
+
+        if (typeof runtime.requestIdleCallback === 'function') {
+          idleHandle = runtime.requestIdleCallback(runDeferred, { timeout: 1200 });
+          return;
         }
 
-        const cashSessions: CashSession[] = sessions.map((row) => ({
-          id: String(row.id),
-          sessionNumber: String(row.session_number ?? ''),
-          openedBy: String(row.opened_by ?? ''),
-          closedBy: row.closed_by ? String(row.closed_by) : undefined,
-          openingAmount: Number(row.opening_amount ?? 0),
-          openedAt: row.opened_at ? new Date(String(row.opened_at)) : new Date(),
-          closedAt: row.closed_at ? new Date(String(row.closed_at)) : undefined,
-          movements: cashMovementsBySession.get(String(row.id)) ?? [],
-          notes: row.notes ? String(row.notes) : undefined,
-          status: (row.status as CashSession['status']) ?? 'closed',
-        }));
-
-        dispatch({ type: 'SET_PRODUCTS', payload: products.map(mapProduct) });
-        dispatch({ type: 'SET_CUSTOMERS', payload: customers.map(mapCustomer) });
-        dispatch({ type: 'SET_CATEGORIES', payload: categories.map(mapCategory) });
-        dispatch({ type: 'SET_SUPPLIERS', payload: suppliers.map(mapSupplier) });
-        dispatch({ type: 'SET_INVENTORY', payload: inventory.map(mapInventory) });
-        dispatch({ type: 'SET_KARDEX', payload: kardex.map(mapKardex) });
-        dispatch({ type: 'SET_ORDERS', payload: orders.map(mapOrder) });
-        dispatch({ type: 'SET_PURCHASES', payload: purchases.map(mapPurchase) });
-        dispatch({ type: 'SET_CASH_SESSIONS', payload: cashSessions });
+        idleHandle = runtime.setTimeout(runDeferred, 300) as unknown as number;
       })
       .catch(() => {
         loadedRef.current = false;
       });
+
+    return () => {
+      cancelled = true;
+      if (idleHandle == null) return;
+
+      if (typeof runtime.cancelIdleCallback === 'function') {
+        runtime.cancelIdleCallback(idleHandle);
+        return;
+      }
+
+      runtime.clearTimeout(idleHandle);
+    };
   }, [dispatch, isAuthenticated]);
 
   return null;

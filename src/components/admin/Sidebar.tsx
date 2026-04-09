@@ -170,6 +170,8 @@ export default function Sidebar({ className, onNavigate }: SidebarProps) {
             <img
               src="/favicon.ico"
               alt="Icono de Motorepuestos"
+              loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover"
             />
           </div>

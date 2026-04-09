@@ -348,7 +348,13 @@ export default function Products() {
       header: 'Imagen',
       accessor: (product: Product) => (
         product.image ? (
-          <img src={product.image} alt={product.name} className="w-12 h-12 rounded-md object-cover border border-border" />
+          <img
+            src={product.image}
+            alt={product.name}
+            loading="lazy"
+            decoding="async"
+            className="w-12 h-12 rounded-md object-cover border border-border"
+          />
         ) : (
           <div className="w-12 h-12 rounded-md bg-muted border border-border flex items-center justify-center text-xs text-muted-foreground">
             N/A

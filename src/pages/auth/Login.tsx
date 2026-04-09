@@ -14,6 +14,8 @@ export default function Login() {
   const [resetEmail, setResetEmail] = useState('');
   const [resetMessage, setResetMessage] = useState('');
   const [resetToken, setResetToken] = useState('');
+  const [mobileCoverReady, setMobileCoverReady] = useState(false);
+  const [desktopCoverReady, setDesktopCoverReady] = useState(false);
   const { login, requestPasswordReset, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const resetLink = useMemo(() => {
@@ -94,7 +96,16 @@ export default function Login() {
       <div className="mx-auto flex h-full w-full max-w-[980px] items-center justify-center">
         <div className="relative w-full overflow-hidden rounded-[30px] border border-white/15 bg-[rgba(17,9,15,0.78)] shadow-[0_44px_120px_-44px_rgba(0,0,0,0.95)] backdrop-blur-md lg:grid lg:min-h-[620px] lg:grid-cols-[1fr_1.05fr]">
           <div className="relative h-52 overflow-hidden border-b border-white/10 lg:hidden">
-            <img src="/login-cover.jpg" alt="Imagen de portada del sistema" className="h-full w-full object-cover" />
+            {!mobileCoverReady && <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-[#2a0f18] to-[#3a131f]" />}
+            <img
+              src="/login-cover.jpg"
+              alt="Imagen de portada del sistema"
+              loading="lazy"
+              decoding="async"
+              fetchPriority="low"
+              onLoad={() => setMobileCoverReady(true)}
+              className={`h-full w-full object-cover transition-opacity duration-300 ${mobileCoverReady ? 'opacity-100' : 'opacity-0'}`}
+            />
             <div className="absolute inset-0 bg-gradient-to-r from-black/45 via-[#320910]/35 to-[#cf1717]/50" />
           </div>
 
@@ -251,7 +262,16 @@ export default function Login() {
           </div>
 
           <aside className="relative hidden min-h-[620px] overflow-hidden border-l border-white/10 lg:block">
-            <img src="/login-cover.jpg" alt="Imagen de apoyo para el acceso" className="h-full w-full object-cover" />
+            {!desktopCoverReady && <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#211018] via-[#1a0b12] to-[#350b13]" />}
+            <img
+              src="/login-cover.jpg"
+              alt="Imagen de apoyo para el acceso"
+              loading="lazy"
+              decoding="async"
+              fetchPriority="low"
+              onLoad={() => setDesktopCoverReady(true)}
+              className={`h-full w-full object-cover transition-opacity duration-300 ${desktopCoverReady ? 'opacity-100' : 'opacity-0'}`}
+            />
             <div className="absolute inset-0 bg-gradient-to-br from-black/35 via-transparent to-[#ff0000]/45" />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_85%,rgba(255,0,0,0.35),transparent_45%)]" />
           </aside>
