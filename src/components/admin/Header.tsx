@@ -173,8 +173,13 @@ export default function Header() {
     navigate('/login', { replace: true });
 
     window.setTimeout(() => {
-      if (window.location.pathname !== '/login') {
-        window.location.replace('/login');
+      const isDesktopRuntime = window.location.protocol === 'file:';
+      const isOnLogin = isDesktopRuntime
+        ? window.location.hash.startsWith('#/login')
+        : window.location.pathname === '/login';
+
+      if (!isOnLogin) {
+        window.location.replace(isDesktopRuntime ? '#/login' : '/login');
       }
     }, 50);
   };
