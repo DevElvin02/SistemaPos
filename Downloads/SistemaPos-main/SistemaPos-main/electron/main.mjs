@@ -1,4 +1,6 @@
+// Permitir acceso automático a la cámara en Electron para pruebas
 import { app, BrowserWindow, dialog, shell } from 'electron'
+app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
@@ -52,6 +54,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webSecurity: false, // Permitir acceso a cámara (solo para pruebas)
     },
   })
 

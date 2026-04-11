@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '@/context/AuthContext';
+import { BarcodeField } from '@/components/BarcodeField';
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { useAdmin } from '@/context/AdminContext'
@@ -18,6 +20,7 @@ const IVA_RATE = 0.13
 export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrderModalProps) {
   const { state } = useAdmin()
   const { companySettings } = useCompanySettings()
+  const { user } = useAuth();
   const [customerId, setCustomerId] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [barcodeInput, setBarcodeInput] = useState('')
@@ -365,28 +368,23 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
                   </div>
                   <div>
                     <label className="block text-sm font-semibold mb-1">Escaneo de código de barras</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={barcodeInput}
-                        onChange={(e) => setBarcodeInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            handleBarcodeAdd()
-                          }
-                        }}
-                        className="flex-1 px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-                        placeholder="Escanear SKU y Enter"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleBarcodeAdd}
-                        className="px-3 py-2.5 rounded-xl border border-border hover:bg-muted transition font-medium"
-                      >
-                        Escanear
-                      </button>
-                    </div>
+                    <BarcodeField
+                      userRole={user?.role === 'admin' ? 'admin' : user?.role === 'cajero' ? 'cajero' : 'otro'}
+                      onBarcode={(code) => {
+                        setBarcodeInput(code);
+                        // Simula el mismo flujo que handleBarcodeAdd pero automático
+                        const barcode = code.trim().toLowerCase();
+                        const found = state.products.find((p) => p.sku.toLowerCase() === barcode || (p.barcode ?? '').toLowerCase() === barcode);
+                        if (!found) {
+                          toast.error('Producto no encontrado por codigo');
+                          return;
+                        }
+                        addLineItem(found.id, found.name, found.sku, found.price, 1);
+                        setBarcodeInput('');
+                        toast.success(`Agregado: ${found.name}`);
+                      }}
+                      placeholder="Escanear SKU o código de barras"
+                    />
                   </div>
                 </div>
 

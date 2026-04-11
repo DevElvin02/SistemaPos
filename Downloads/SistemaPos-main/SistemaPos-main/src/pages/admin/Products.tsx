@@ -11,7 +11,7 @@ import { API_URL, apiRequest } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { useAdmin } from '@/context/AdminContext';
-import { BarcodeInput } from '../../components/BarcodeInput';
+import { BarcodeField } from '@/components/BarcodeField';
 import { fetchProductByBarcode } from '../../services/products';
 import { useRef } from 'react';
 
@@ -108,8 +108,12 @@ export default function Products() {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [formData, setFormData] = useState<ProductFormData>(buildFormData());
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
   const [barcodeProduct, setBarcodeProduct] = useState<any>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+
+  // Estado para el modal del escáner
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const canCreate = hasPermission('products.create');
   const canEdit = hasPermission('products.edit');
@@ -495,18 +499,7 @@ export default function Products() {
         </div>
       </div>
 
-      {/* --- INICIO INTEGRACIÓN ESCÁNER DE BARRAS --- */}
-      <div className="mb-6">
-        <BarcodeInput userRole={user?.role === 'admin' ? 'admin' : user?.role === 'cajero' ? 'cajero' : 'otro'} onBarcode={handleBarcode} />
-        {barcodeProduct && (
-          <div className="mt-2 p-3 border rounded bg-muted">
-            <div><b>Nombre:</b> {barcodeProduct.nombre}</div>
-            <div><b>Precio:</b> {barcodeProduct.precio}</div>
-            <div><b>Stock:</b> {barcodeProduct.stock}</div>
-          </div>
-        )}
-      </div>
-      {/* --- FIN INICIO INTEGRACIÓN ESCÁNER DE BARRAS --- */}
+
 
       <DataTable columns={columns} data={filteredProducts} />
 
@@ -606,13 +599,13 @@ export default function Products() {
                     </div>
                     <div>
                       <label className="block text-sm font-semibold mb-1">Codigo de barras</label>
-                      <input
-                        type="text"
-                        value={formData.barcode}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, barcode: e.target.value }))}
-                        className="w-full px-3 py-2.5 border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                      <BarcodeField
+                        userRole={user?.role === 'admin' ? 'admin' : user?.role === 'cajero' ? 'cajero' : 'otro'}
+                        onBarcode={(code) => setFormData((prev) => ({ ...prev, barcode: code }))}
+                        placeholder="Código de barras"
                       />
                     </div>
+
 
                     <div className="md:col-span-2">
                       <label className="block text-sm font-semibold mb-1">Imagen (URL)</label>
