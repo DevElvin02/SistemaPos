@@ -14,8 +14,10 @@ interface Props {
 
 export function BarcodeField({ userRole, onBarcode, placeholder = 'Código de barras' }: Props) {
 
-  // Debug: Mostrar valores de rol y entorno
-  console.log('userRole:', userRole, 'isWeb:', isWeb());
+
+  // Debug: Mostrar valores de rol y entorno SIEMPRE
+  // eslint-disable-next-line no-console
+  console.log('[DEBUG BarcodeField] userRole:', userRole, 'isWeb:', isWeb());
 
   const [scannerOpen, setScannerOpen] = useState(false);
   const { inputRef, handleKeyDown } = useBarcodeInput(onBarcode);
@@ -53,6 +55,12 @@ export function BarcodeField({ userRole, onBarcode, placeholder = 'Código de ba
             onScan={onBarcode}
           />
         </>
+      )}
+      {/* Mensaje visual de debug si NO se muestra el botón */}
+      {!showCameraButton && (
+        <span style={{ color: 'red', fontSize: 12, marginLeft: 8 }}>
+          [Debug] userRole: {String(userRole)} | isWeb: {String(isWeb())}
+        </span>
       )}
     </div>
   );
