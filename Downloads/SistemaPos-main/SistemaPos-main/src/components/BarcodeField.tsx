@@ -13,6 +13,10 @@ interface Props {
 }
 
 export function BarcodeField({ userRole, onBarcode, placeholder = 'Código de barras' }: Props) {
+
+  // Debug: Mostrar valores de rol y entorno
+  console.log('userRole:', userRole, 'isWeb:', isWeb());
+
   const [scannerOpen, setScannerOpen] = useState(false);
   const { inputRef, handleKeyDown } = useBarcodeInput(onBarcode);
 
