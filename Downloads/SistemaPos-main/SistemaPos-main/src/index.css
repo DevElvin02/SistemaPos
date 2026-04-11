@@ -1,0 +1,110 @@
+@import 'tailwindcss';
+
+:root {
+  --background: #F2F2F2;
+  --foreground: #0D0D0D;
+  --card: #FFFFFF;
+  --card-foreground: #0D0D0D;
+  --popover: #FFFFFF;
+  --popover-foreground: #0D0D0D;
+  --primary: #F28705;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F26716;
+  --secondary-foreground: #FFFFFF;
+  --muted: #E8E8E8;
+  --muted-foreground: #666666;
+  --accent: #F22E2E;
+  --accent-foreground: #FFFFFF;
+  --destructive: #F22E2E;
+  --destructive-foreground: #FFFFFF;
+  --border: #DDDDDD;
+  --input: #FFFFFF;
+  --ring: #F28705;
+  --chart-1: #F28705;
+  --chart-2: #F26716;
+  --chart-3: #F22E2E;
+  --chart-4: #F28705;
+  --chart-5: #F26716;
+  --radius: 0.5rem;
+  --sidebar: #0D0D0D;
+  --sidebar-foreground: #F2F2F2;
+  --sidebar-primary: #F28705;
+  --sidebar-primary-foreground: #0D0D0D;
+  --sidebar-accent: #F26716;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #333333;
+  --sidebar-ring: #F28705;
+}
+
+.dark {
+  --background: #1A1A1A;
+  --foreground: #F2F2F2;
+  --card: #262626;
+  --card-foreground: #F2F2F2;
+  --popover: #262626;
+  --popover-foreground: #F2F2F2;
+  --primary: #F28705;
+  --primary-foreground: #0D0D0D;
+  --secondary: #F26716;
+  --secondary-foreground: #0D0D0D;
+  --muted: #404040;
+  --muted-foreground: #BBBBBB;
+  --accent: #F22E2E;
+  --accent-foreground: #FFFFFF;
+  --destructive: #F22E2E;
+  --destructive-foreground: #FFFFFF;
+  --border: #404040;
+  --input: #262626;
+  --ring: #F28705;
+  --chart-1: #F28705;
+  --chart-2: #F26716;
+  --chart-3: #F22E2E;
+  --chart-4: #F28705;
+  --chart-5: #F26716;
+  --sidebar: #0D0D0D;
+  --sidebar-foreground: #F2F2F2;
+  --sidebar-primary: #F28705;
+  --sidebar-primary-foreground: #0D0D0D;
+  --sidebar-accent: #F26716;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #404040;
+  --sidebar-ring: #F28705;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  background-image:
+    radial-gradient(circle at 10% 8%, rgba(13, 148, 136, 0.12), transparent 30%),
+    radial-gradient(circle at 92% 12%, rgba(30, 41, 59, 0.11), transparent 26%),
+    linear-gradient(170deg, #f8fafc 0%, #eef2f7 100%);
+  background-attachment: fixed;
+  font-feature-settings: "rounding" 1;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--primary) 68%, #cbd5e1);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--primary) 80%, #94a3b8);
+}
