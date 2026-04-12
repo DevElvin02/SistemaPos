@@ -23,7 +23,8 @@ export function BarcodeField({ userRole, onBarcode, placeholder = 'Código de ba
   const { inputRef, handleKeyDown } = useBarcodeInput(onBarcode);
 
   // Lógica de permisos
-  const showCameraButton = isWeb() && canUseCameraScanner(userRole);
+  // Forzar que el botón siempre se muestre para depuración
+  const showCameraButton = true;
 
   const handleScanButton = () => {
     if (!isWeb()) {
@@ -46,22 +47,19 @@ export function BarcodeField({ userRole, onBarcode, placeholder = 'Código de ba
         onKeyDown={handleKeyDown}
         className="flex-1 min-w-0 px-3 py-2.5 border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
       />
-      {showCameraButton && isWeb() && (
-        <>
-          <ScanButton onClick={handleScanButton} />
-          <BarcodeScannerModal
-            open={scannerOpen}
-            onClose={() => setScannerOpen(false)}
-            onScan={onBarcode}
-          />
-        </>
-      )}
-      {/* Mensaje visual de debug si NO se muestra el botón */}
-      {!showCameraButton && (
-        <span style={{ color: 'red', fontSize: 12, marginLeft: 8 }}>
-          [Debug] userRole: {String(userRole)} | isWeb: {String(isWeb())}
-        </span>
-      )}
+      {/* Forzar siempre el botón para depuración */}
+      <>
+        <ScanButton onClick={handleScanButton} />
+        <BarcodeScannerModal
+          open={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          onScan={onBarcode}
+        />
+      </>
+      {/* Mensaje visual de debug SIEMPRE visible */}
+      <span style={{ color: 'red', fontSize: 12, marginLeft: 8 }}>
+        [Debug] userRole: {String(userRole)} | isWeb: {String(isWeb())}
+      </span>
     </div>
   );
 }
