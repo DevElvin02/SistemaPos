@@ -42,7 +42,7 @@ export function BarcodeField({ userRole, onBarcode, placeholder = 'Código de ba
       <input
         ref={inputRef}
         type="text"
-        placeholder="PRUEBA DE CAMBIO"
+        placeholder={placeholder}
         onKeyDown={handleKeyDown}
         className="flex-1 min-w-0 px-3 py-2.5 border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
       />
