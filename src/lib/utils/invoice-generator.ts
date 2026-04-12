@@ -16,7 +16,7 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
   const { order, customerName, customerEmail, companyName, companyAddress, companyEmail, companyPhone, companyCountry } = invoiceData
 
   // Performance/maintainability: evita porcentajes quemados y mantiene consistencia fiscal.
-  const taxRate = 0.13
+  const taxRate = 0.0 // Cambia al porcentaje de IVA que corresponda, por ejemplo 0.13 para 13%
   const subtotal = order.amount / (1 + taxRate)
   const taxAmount = order.amount - subtotal
   const totalAmount = order.amount
@@ -220,7 +220,7 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
               <td>$${subtotal.toFixed(2)}</td>
             </tr>
             <tr>
-              <td>IVA (13%):</td>
+              <td>IVA (0%):</td>
               <td>$${taxAmount.toFixed(2)}</td>
             </tr>
             <tr class="total-row">
@@ -243,7 +243,7 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
 export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
   const { order, customerName, companyName, companyAddress, companyEmail, companyPhone, companyCountry } = invoiceData
 
-  const taxRate = 0.13
+  const taxRate = 0.0 // Cambia al porcentaje de IVA que corresponda, por ejemplo 0.13 para 13%
   const subtotal = order.amount / (1 + taxRate)
   const taxAmount = order.amount - subtotal
   const totalAmount = order.amount
@@ -410,7 +410,7 @@ export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
             <span>$${subtotal.toFixed(2)}</span>
           </div>
           <div class="total-row">
-            <span>IVA (13%):</span>
+            <span>IVA (0%):</span>
             <span>$${taxAmount.toFixed(2)}</span>
           </div>
         </div>
@@ -488,7 +488,7 @@ export const generateTicketPDF = async (invoiceData: InvoiceData, filename: stri
     format: [80, 180],
   })
 
-  const taxRate = 0.13
+  const taxRate = 0.0 // Cambia al porcentaje de IVA que corresponda, por ejemplo 0.13 para 13%
   const baseAmount = order.amount / (1 + taxRate)
   const taxAmount = order.amount - baseAmount
   const totalAmount = order.amount
@@ -540,7 +540,7 @@ export const generateTicketPDF = async (invoiceData: InvoiceData, filename: stri
   doc.text(formatCurrency(baseAmount), 75, y, { align: 'right' })
 
   y += 5
-  doc.text('IVA (13%)', 5, y)
+  doc.text('IVA (0%)', 5, y)
   doc.text(formatCurrency(taxAmount), 75, y, { align: 'right' })
 
   y += 5

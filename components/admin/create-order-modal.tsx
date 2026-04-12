@@ -14,7 +14,7 @@ interface CreateOrderModalProps {
 type PaymentMethod = 'cash' | 'transfer'
 type DocumentType = 'ticket' | 'invoice'
 
-const IVA_RATE = 0.13
+const IVA_RATE = 0.00 // Cambia al porcentaje de IVA que corresponda, por ejemplo 0.16 para 16%
 
 export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrderModalProps) {
   const [customerId, setCustomerId] = useState('')
@@ -210,7 +210,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
           </table>
 
           <p class="total">Subtotal: ${formatCurrency(order.subtotal)}</p>
-          <p class="total">IVA (13%): ${formatCurrency(order.tax)}</p>
+          <p class="total">IVA (0%): ${formatCurrency(order.tax)}</p>
           <p class="total">Total: ${formatCurrency(order.amount)}</p>
           ${
             order.payment.method === 'cash'
@@ -516,7 +516,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
             <div className="text-right">
               <p className="text-sm text-muted-foreground">Total de artículos: {totalItems}</p>
               <p className="text-sm text-muted-foreground">Subtotal: {formatCurrency(subtotal)}</p>
-              <p className="text-sm text-muted-foreground">IVA (13%): {formatCurrency(ivaAmount)}</p>
+              <p className="text-sm text-muted-foreground">IVA (): {formatCurrency(ivaAmount)}</p>
               <p className="text-xl font-bold text-foreground">Total: {formatCurrency(total)}</p>
               <p className="text-xs text-muted-foreground mt-1">Atajos: Alt + A agrega producto, Ctrl + Enter registra venta</p>
             </div>

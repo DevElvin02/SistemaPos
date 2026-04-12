@@ -13,7 +13,7 @@ export interface InvoiceData {
 export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
   const { order, customerName, customerEmail, companyName, companyAddress } = invoiceData
 
-  const taxRate = 0.13
+  const taxRate = 0.0 
   const subtotal = order.amount / (1 + taxRate)
   const taxAmount = order.amount - subtotal
   const totalAmount = order.amount
@@ -214,7 +214,7 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
               <td>$${subtotal.toFixed(2)}</td>
             </tr>
             <tr>
-              <td>IVA (13%):</td>
+              <td>IVA (0%):</td>
               <td>$${taxAmount.toFixed(2)}</td>
             </tr>
             <tr class="total-row">
@@ -237,7 +237,7 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
 export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
   const { order, customerName, companyName } = invoiceData
 
-  const taxRate = 0.13
+  const taxRate = 0.0 // Cambia al porcentaje de IVA que corresponda, por ejemplo 0.13 para 13%
   const subtotal = order.amount / (1 + taxRate)
   const taxAmount = order.amount - subtotal
   const totalAmount = order.amount
@@ -400,7 +400,7 @@ export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
             <span>$${subtotal.toFixed(2)}</span>
           </div>
           <div class="total-row">
-            <span>IVA (13%):</span>
+            <span>IVA (0%):</span>
             <span>$${taxAmount.toFixed(2)}</span>
           </div>
         </div>
