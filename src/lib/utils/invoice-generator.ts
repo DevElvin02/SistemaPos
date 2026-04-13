@@ -16,7 +16,7 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
   const { order, customerName, customerEmail, companyName, companyAddress, companyEmail, companyPhone, companyCountry } = invoiceData
 
   // Performance/maintainability: evita porcentajes quemados y mantiene consistencia fiscal.
-  const taxRate = 0.0 // Cambia al porcentaje de IVA que corresponda, por ejemplo 0.13 para 13%
+  const taxRate = 0.0 // Cambia a 0.13 para calcular el IVA (13%)
   const subtotal = order.amount / (1 + taxRate)
   const taxAmount = order.amount - subtotal
   const totalAmount = order.amount
@@ -243,7 +243,7 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
 export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
   const { order, customerName, companyName, companyAddress, companyEmail, companyPhone, companyCountry } = invoiceData
 
-  const taxRate = 0.0 // Cambia al porcentaje de IVA que corresponda, por ejemplo 0.13 para 13%
+  const taxRate = 0.0 // Cambia a 0.13 para calcular el IVA (13%)
   const subtotal = order.amount / (1 + taxRate)
   const taxAmount = order.amount - subtotal
   const totalAmount = order.amount
@@ -488,7 +488,7 @@ export const generateTicketPDF = async (invoiceData: InvoiceData, filename: stri
     format: [80, 180],
   })
 
-  const taxRate = 0.0 // Cambia al porcentaje de IVA que corresponda, por ejemplo 0.13 para 13%
+  const taxRate = 0.0 // Cambia a 0.13 para calcular el IVA (13%)
   const baseAmount = order.amount / (1 + taxRate)
   const taxAmount = order.amount - baseAmount
   const totalAmount = order.amount

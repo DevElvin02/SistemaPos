@@ -62,7 +62,7 @@ router.post('/', async (req, res, next) => {
       subtotal += Number(item.unitPrice) * Number(item.quantity);
     }
 
-    const tax = Number((subtotal * 0.0).toFixed(2)); // Cambia al porcentaje de IVA que corresponda, por ejemplo 0.16 para 16%
+    const tax = Number((subtotal * 0.0).toFixed(2)); // Cambia a 0.13 para calcular el IVA (13%)
     const total = Number((subtotal + tax).toFixed(2));
 
     if (paymentMethod === 'cash' && Number(amountReceived) < total) {
