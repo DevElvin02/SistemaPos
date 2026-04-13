@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { BarChart, Bar, CartesianGrid, LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import StatusBadge from '@/components/admin/StatusBadge';
 import { useAdmin } from '@/context/AdminContext';
+import { isInventoryReversalStatus } from '@/lib/data/orders';
 
 interface OrderLineLike {
   productId: string;
@@ -33,7 +34,7 @@ export default function Reports() {
   const orders = state.orders as unknown as OrderWithLines[];
 
   const validSales = useMemo(
-    () => orders.filter((order) => order.status !== 'cancelled'),
+    () => orders.filter((order) => !isInventoryReversalStatus(order.status)),
     [orders]
   );
 

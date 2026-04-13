@@ -3,6 +3,80 @@ import { dbPool } from '../db/pool.js';
 
 const router = Router();
 
+const REVERSAL_STATUSES = new Set(['cancelled', 'returned', 'refunded']);
+
+function normalizeSaleStatus(status) {
+  const value = String(status ?? '').toLowerCase();
+  if (value === 'paid' || value === 'completed') return 'delivered';
+  if (value === 'cancelled' || value === 'returned' || value === 'refunded') return value;
+  if (value === 'pending' || value === 'processing' || value === 'shipped' || value === 'delivered') return 'delivered';
+  return 'delivered';
+}
+
+function canCancelSale(currentStatus) {
+  const normalized = normalizeSaleStatus(currentStatus);
+  return normalized !== 'delivered' && !REVERSAL_STATUSES.has(normalized);
+}
+
+function canReturnOrRefundSale(currentStatus) {
+  return normalizeSaleStatus(currentStatus) === 'delivered';
+}
+
+function reversalReason(status, saleNumber) {
+  if (status === 'cancelled') return `Cancelacion de venta ${saleNumber}`;
+  if (status === 'returned') return `Devolucion de venta ${saleNumber}`;
+  return `Reembolso de venta ${saleNumber}`;
+}
+
+async function restockSaleItems(connection, saleId, saleNumber, userId, targetStatus) {
+  const [items] = await connection.query(
+    `SELECT si.product_id, si.quantity, i.quantity AS inventory_quantity
+     FROM sale_items si
+     LEFT JOIN inventory i ON i.product_id = si.product_id
+     WHERE si.sale_id = ?
+     FOR UPDATE`,
+    [saleId]
+  );
+
+  for (const item of items) {
+    const productId = Number(item.product_id);
+    const quantity = Number(item.quantity || 0);
+    const beforeQty = Number(item.inventory_quantity || 0);
+    const afterQty = Number((beforeQty + quantity).toFixed(2));
+
+    await connection.query(
+      'UPDATE inventory SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE product_id = ?',
+      [afterQty, productId]
+    );
+
+    await connection.query(
+      `INSERT INTO inventory_movements
+       (product_id, movement_type, quantity, before_qty, after_qty, reason, reference_type, reference_id, created_by)
+       VALUES (?, 'entrada', ?, ?, ?, ?, 'sale_reversal', ?, ?)`,
+      [productId, quantity, beforeQty, afterQty, reversalReason(targetStatus, saleNumber), saleId, userId || null]
+    );
+  }
+}
+
+async function registerCashReversal(connection, saleId, saleNumber, total, userId, targetStatus) {
+  if (targetStatus !== 'cancelled' && targetStatus !== 'refunded') {
+    return;
+  }
+
+  const [openCashRows] = await connection.query(
+    `SELECT id FROM cash_sessions WHERE status = 'open' ORDER BY id DESC LIMIT 1`
+  );
+
+  if (!openCashRows.length) return;
+
+  await connection.query(
+    `INSERT INTO cash_movements
+     (cash_session_id, movement_type, amount, reason, reference_type, reference_id, created_by)
+     VALUES (?, 'salida', ?, ?, 'sale_reversal', ?, ?)`,
+    [openCashRows[0].id, total, reversalReason(targetStatus, saleNumber), saleId, userId || null]
+  );
+}
+
 function isSchemaMissing(error) {
   const code = String(error?.code || '');
   return code === 'ER_NO_SUCH_TABLE' || code === 'ER_BAD_FIELD_ERROR';
@@ -173,14 +247,65 @@ router.post('/', async (req, res, next) => {
 });
 
 router.patch('/:id/status', async (req, res, next) => {
+  const connection = await dbPool.getConnection();
+
   try {
     const { id } = req.params;
     const { status } = req.body || {};
-    await dbPool.query(
-      'UPDATE sales SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [status, id]
+    const targetStatus = String(status ?? '').toLowerCase();
+
+    if (!targetStatus) {
+      return res.status(400).json({ ok: false, message: 'status es obligatorio' });
+    }
+
+    await connection.beginTransaction();
+
+    const [saleRows] = await connection.query(
+      `SELECT id, sale_number, total, status
+       FROM sales
+       WHERE id = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [id]
     );
-    const [rows] = await dbPool.query(
+
+    if (!saleRows.length) {
+      await connection.rollback();
+      return res.status(404).json({ ok: false, message: 'Venta no encontrada' });
+    }
+
+    const sale = saleRows[0];
+    const currentStatus = normalizeSaleStatus(sale.status);
+
+    if (REVERSAL_STATUSES.has(currentStatus)) {
+      await connection.rollback();
+      return res.status(400).json({ ok: false, message: `La venta ya fue ${currentStatus} y no se puede revertir otra vez` });
+    }
+
+    if (targetStatus === 'cancelled') {
+      if (!canCancelSale(sale.status)) {
+        await connection.rollback();
+        return res.status(400).json({ ok: false, message: 'La venta ya fue entregada. Usa devolución o reembolso en lugar de cancelación.' });
+      }
+
+      await restockSaleItems(connection, sale.id, sale.sale_number, null, targetStatus);
+      await registerCashReversal(connection, sale.id, sale.sale_number, Number(sale.total || 0), null, targetStatus);
+    } else if (targetStatus === 'returned' || targetStatus === 'refunded') {
+      if (!canReturnOrRefundSale(sale.status)) {
+        await connection.rollback();
+        return res.status(400).json({ ok: false, message: 'Solo las ventas entregadas pueden marcarse como devolución o reembolso.' });
+      }
+
+      await restockSaleItems(connection, sale.id, sale.sale_number, null, targetStatus);
+      await registerCashReversal(connection, sale.id, sale.sale_number, Number(sale.total || 0), null, targetStatus);
+    }
+
+    await connection.query(
+      'UPDATE sales SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [targetStatus, id]
+    );
+
+    const [rows] = await connection.query(
       `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name,
               s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status,
               COALESCE(SUM(si.quantity), 0) AS items
@@ -191,9 +316,14 @@ router.patch('/:id/status', async (req, res, next) => {
        GROUP BY s.id, s.sale_number, s.customer_id, c.name, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status`,
       [id]
     );
+
+    await connection.commit();
     res.json({ ok: true, data: rows[0] });
   } catch (error) {
+    await connection.rollback();
     next(error);
+  } finally {
+    connection.release();
   }
 });
 

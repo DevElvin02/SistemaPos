@@ -5,6 +5,7 @@ import StatusBadge from '@/components/admin/StatusBadge';
 import { GenericActionButtons } from '@/components/admin/GenericActionButtons';
 import { DeleteConfirmModal } from '@/components/admin/EntityModals';
 import { Customer } from '@/lib/data/customers';
+import { isInventoryReversalStatus } from '@/lib/data/orders';
 import { toast } from 'sonner';
 import { useAdmin } from '@/context/AdminContext';
 import { useAuth } from '@/context/AuthContext';
@@ -82,6 +83,8 @@ export default function Customers() {
     }
 
     for (const order of state.orders) {
+      if (isInventoryReversalStatus(order.status)) continue;
+
       const metric = byId.get(order.customerId);
       if (!metric) continue;
 

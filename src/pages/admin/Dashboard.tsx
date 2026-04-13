@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import StatCard from '@/components/admin/StatCard';
 import { useAdmin } from '@/context/AdminContext';
+import { isInventoryReversalStatus } from '@/lib/data/orders';
 
 // Performance: el grafico usa librerias pesadas y se difiere para no bloquear el render principal.
 const SalesTrendChart = lazy(() => import('@/components/admin/SalesTrendChart'));
@@ -33,7 +34,7 @@ export default function Dashboard() {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate();
 
-  const validOrders = state.orders.filter((order) => order.status !== 'cancelled');
+  const validOrders = state.orders.filter((order) => !isInventoryReversalStatus(order.status));
   const todayOrders = validOrders.filter((order) => isSameDay(new Date(order.date), now));
 
   const yesterday = new Date(now);

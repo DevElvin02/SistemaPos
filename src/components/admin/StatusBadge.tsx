@@ -19,6 +19,8 @@ const statusVariantMap: Record<string, 'success' | 'warning' | 'error' | 'info' 
   processing: 'warning',
   pending: 'warning',
   cancelled: 'error',
+  returned: 'info',
+  refunded: 'error',
   normal: 'success',
   low: 'warning',
   critical: 'error',

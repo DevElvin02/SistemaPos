@@ -1,6 +1,6 @@
 import type { CashSession } from './data/cash-register';
 import type { InventoryItem } from './data/inventory';
-import type { Order } from './data/orders';
+import { isInventoryReversalStatus, type Order } from './data/orders';
 
 export interface AdminNotification {
   id: string;
@@ -74,19 +74,7 @@ export function buildAdminNotifications({ inventory, orders, cashSessions }: Not
     });
   }
 
-  const pendingOrders = orders.filter((order) => order.status === 'pending' || order.status === 'processing');
-  if (pendingOrders.length > 0) {
-    notifications.push({
-      id: 'orders-pending',
-      title: 'Ventas pendientes',
-      message: `${pendingOrders.length} venta(s) aun requieren seguimiento.`,
-      href: '/orders',
-      severity: 'info',
-      timestamp: latestTimestamp(pendingOrders.map((order) => new Date(order.date).getTime()), now),
-    });
-  }
-
-  const todaySales = orders.filter((order) => isSameDay(new Date(order.date), today) && order.status !== 'cancelled');
+  const todaySales = orders.filter((order) => isSameDay(new Date(order.date), today) && !isInventoryReversalStatus(order.status));
   if (todaySales.length > 0) {
     const total = todaySales.reduce((sum, order) => sum + order.amount, 0);
     notifications.push({

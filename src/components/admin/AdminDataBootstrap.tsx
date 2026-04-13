@@ -7,21 +7,9 @@ import type { Customer } from '@/lib/data/customers';
 import type { Category } from '@/lib/data/categories';
 import type { Supplier } from '@/lib/data/suppliers';
 import type { InventoryItem, KardexMovement } from '@/lib/data/inventory';
-import type { Order } from '@/lib/data/orders';
+import { normalizeOrderStatus, type Order } from '@/lib/data/orders';
 import type { Purchase } from '@/lib/data/purchases';
 import type { CashSession, CashMovement } from '@/lib/data/cash-register';
-
-function normalizeOrderStatus(status: unknown): Order['status'] {
-  const value = String(status ?? '').toLowerCase();
-
-  if (value === 'paid' || value === 'completed') return 'delivered';
-  if (value === 'cancelled') return 'cancelled';
-  if (value === 'processing' || value === 'shipped' || value === 'delivered' || value === 'pending') {
-    return value as Order['status'];
-  }
-
-  return 'pending';
-}
 
 function mapProduct(row: Record<string, unknown>): Product {
   return {

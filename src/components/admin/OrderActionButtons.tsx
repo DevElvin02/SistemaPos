@@ -1,4 +1,4 @@
-import { Order } from '@/lib/data/orders'
+import { Order, canCancelOrder, canRefundOrder, canReturnOrder, isInventoryReversalStatus } from '@/lib/data/orders'
 
 interface OrderActionButtonsProps {
   order: Order
@@ -7,6 +7,8 @@ interface OrderActionButtonsProps {
   onPrint: (order: Order) => void
   onPdf: (order: Order) => void
   onCancel?: (orderId: string) => void
+  onReturn?: (orderId: string) => void
+  onRefund?: (orderId: string) => void
   disabled?: boolean
 }
 
@@ -17,9 +19,14 @@ export function OrderActionButtons({
   onPrint,
   onPdf,
   onCancel,
+  onReturn,
+  onRefund,
   disabled = false,
 }: OrderActionButtonsProps) {
-  const isCancelled = order.status === 'cancelled'
+  const isReversed = isInventoryReversalStatus(order.status)
+  const canCancel = canCancelOrder(order.status)
+  const canReturn = canReturnOrder(order.status)
+  const canRefund = canRefundOrder(order.status)
 
   return (
     <div className="flex items-center gap-2">
@@ -62,7 +69,7 @@ export function OrderActionButtons({
           >
             🖨 PDF
           </button>
-          {!isCancelled && (
+          {canCancel && (
             <button
               onClick={() => onCancel?.(order.id)}
               className="block w-full text-left px-4 py-2 text-sm text-destructive hover:bg-red-50 dark:hover:bg-red-950 rounded-b-lg transition"
@@ -71,9 +78,27 @@ export function OrderActionButtons({
               ✕ Cancelar
             </button>
           )}
-          {isCancelled && (
+          {canReturn && (
+            <button
+              onClick={() => onReturn?.(order.id)}
+              className="block w-full text-left px-4 py-2 text-sm text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950 transition"
+              title="Registrar devolución"
+            >
+              ↺ Devolver
+            </button>
+          )}
+          {canRefund && (
+            <button
+              onClick={() => onRefund?.(order.id)}
+              className="block w-full text-left px-4 py-2 text-sm text-destructive hover:bg-red-50 dark:hover:bg-red-950 rounded-b-lg transition"
+              title="Registrar reembolso"
+            >
+              $ Reembolsar
+            </button>
+          )}
+          {isReversed && (
             <div className="px-4 py-2 text-xs text-muted-foreground rounded-b-lg">
-              Venta cancelada
+              Venta {order.status}
             </div>
           )}
         </div>

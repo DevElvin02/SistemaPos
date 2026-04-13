@@ -39,6 +39,19 @@ async function addColumnIfMissing(tableName, columnName, definition) {
   }
 }
 
+async function modifyColumnIfExists(tableName, columnName, definition) {
+  if (!(await columnExists(tableName, columnName))) return;
+  try {
+    await dbPool.query(`ALTER TABLE ${tableName} MODIFY COLUMN ${definition}`);
+  } catch (error) {
+    if (isPermissionError(error)) {
+      console.warn(`[DB bootstrap] Sin permisos para modificar ${tableName}.${columnName}. Se omite migracion.`);
+      return;
+    }
+    throw error;
+  }
+}
+
 async function fkExists(tableName, constraintName) {
   const [rows] = await dbPool.query(
     `SELECT COUNT(*) AS total
@@ -233,6 +246,10 @@ export async function bootstrapSchema() {
       "UPDATE suppliers SET status = CASE WHEN is_active = 1 AND (status IS NULL OR status = '') THEN 'active' WHEN is_active = 0 AND (status IS NULL OR status = '') THEN 'inactive' ELSE status END"
     );
     await dbPool.query('UPDATE suppliers SET join_date = COALESCE(join_date, created_at)');
+  }
+
+  if (await tableExists('sales')) {
+    await modifyColumnIfExists('sales', 'status', "status VARCHAR(20) NOT NULL DEFAULT 'delivered'");
   }
 
   // Eliminar FKs hacia users en cash_sessions para permitir IDs de localStorage

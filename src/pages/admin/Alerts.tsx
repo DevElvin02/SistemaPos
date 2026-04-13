@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { AlertTriangle, BellRing, PackageX, TrendingUp } from 'lucide-react';
 import { useAdmin } from '@/context/AdminContext';
+import { isInventoryReversalStatus } from '@/lib/data/orders';
 import { buildAdminNotifications, formatNotificationTime } from '@/lib/admin-notifications';
 
 export default function Alerts() {
@@ -27,7 +28,7 @@ export default function Alerts() {
 
     const sales = state.orders.filter((order) => {
       const orderDate = new Date(order.date);
-      return sameDay(orderDate) && order.status !== 'cancelled';
+      return sameDay(orderDate) && !isInventoryReversalStatus(order.status);
     });
 
     const total = sales.reduce((sum, sale) => sum + sale.amount, 0);

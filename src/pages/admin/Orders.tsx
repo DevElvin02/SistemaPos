@@ -5,7 +5,7 @@ import StatusBadge from '@/components/admin/StatusBadge';
 import { OrderDetailModal } from '@/components/admin/OrderModals';
 import { OrderActionButtons } from '@/components/admin/OrderActionButtons';
 import { CreateOrderModal } from '@/components/admin/CreateOrderModal';
-import { Order } from '@/lib/data/orders';
+import { Order, canCancelOrder, canRefundOrder, canReturnOrder, isInventoryReversalStatus, normalizeOrderStatus } from '@/lib/data/orders';
 import {
   generateInvoiceHTML,
   generateReceiptHTML,
@@ -23,24 +23,6 @@ interface SaleLine {
   productId: string;
   productName: string;
   quantity: number;
-}
-
-function normalizeOrderStatus(status: unknown): Order['status'] {
-  const value = String(status ?? '').toLowerCase();
-
-  if (value === 'paid' || value === 'completed') {
-    return 'delivered';
-  }
-
-  if (value === 'cancelled') {
-    return 'cancelled';
-  }
-
-  if (value === 'processing' || value === 'shipped' || value === 'delivered' || value === 'pending') {
-    return value as Order['status'];
-  }
-
-  return 'pending';
 }
 
 function mapSaleRowToOrder(row: Record<string, unknown>): Order {
@@ -103,6 +85,32 @@ export default function Orders() {
     filteredOrders,
   });
 
+  const updateOrderStatus = async (orderId: string, status: Order['status']) => {
+    const target = state.orders.find((order) => order.id === orderId);
+    if (!target) return;
+
+    try {
+      const data = await apiRequest<Record<string, unknown>>(`/sales/${orderId}/status`, {
+        method: 'PATCH',
+        body: { status },
+      });
+      console.log(`[Orders] status ${status} response`, data);
+
+      dispatch({
+        type: 'UPDATE_ORDER',
+        payload: {
+          ...target,
+          ...mapSaleRowToOrder(data),
+        },
+      });
+
+      await loadOrders(`after-${status}`);
+      toast.success(`Venta ${target.orderNumber} actualizada a ${status}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `No se pudo actualizar la venta a ${status}`);
+    }
+  };
+
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value.toLowerCase());
   };
@@ -113,25 +121,15 @@ export default function Orders() {
   };
 
   const handleCancelOrder = async (orderId: string) => {
-    const target = state.orders.find((order) => order.id === orderId);
-    if (!target) return;
-    try {
-      const data = await apiRequest<Record<string, unknown>>(`/sales/${orderId}/status`, {
-        method: 'PATCH',
-        body: { status: 'cancelled' },
-      });
-      console.log('[Orders] cancel sale response', data);
-      dispatch({
-        type: 'UPDATE_ORDER',
-        payload: {
-          ...target,
-          ...mapSaleRowToOrder(data),
-        },
-      });
-      toast.success(`Venta ${target.orderNumber} cancelada`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo cancelar la venta');
-    }
+    await updateOrderStatus(orderId, 'cancelled');
+  };
+
+  const handleReturnOrder = async (orderId: string) => {
+    await updateOrderStatus(orderId, 'returned');
+  };
+
+  const handleRefundOrder = async (orderId: string) => {
+    await updateOrderStatus(orderId, 'refunded');
   };
 
   const getCustomerEmail = (order: Order) => {
@@ -152,8 +150,8 @@ export default function Orders() {
   });
 
   const handleGenerateInvoice = (order: Order) => {
-    if (order.status === 'cancelled') {
-      toast.error('No se puede facturar una venta cancelada');
+    if (isInventoryReversalStatus(order.status)) {
+      toast.error('No se puede facturar una venta revertida');
       return;
     }
 
@@ -167,8 +165,8 @@ export default function Orders() {
   };
 
   const handlePrintTicket = (order: Order) => {
-    if (order.status === 'cancelled') {
-      toast.error('No se puede imprimir ticket de una venta cancelada');
+    if (isInventoryReversalStatus(order.status)) {
+      toast.error('No se puede imprimir ticket de una venta revertida');
       return;
     }
 
@@ -182,8 +180,8 @@ export default function Orders() {
   };
 
   const handleGeneratePdf = async (order: Order) => {
-    if (order.status === 'cancelled') {
-      toast.error('No se puede generar PDF de una venta cancelada');
+    if (isInventoryReversalStatus(order.status)) {
+      toast.error('No se puede generar PDF de una venta revertida');
       return;
     }
 
@@ -303,7 +301,9 @@ export default function Orders() {
           onInvoice={handleGenerateInvoice}
           onPrint={handlePrintTicket}
           onPdf={handleGeneratePdf}
-          onCancel={handleCancelOrder}
+          onCancel={canCancelOrder(order.status) ? handleCancelOrder : undefined}
+          onReturn={canReturnOrder(order.status) ? handleReturnOrder : undefined}
+          onRefund={canRefundOrder(order.status) ? handleRefundOrder : undefined}
         />
       ),
     },
@@ -352,6 +352,8 @@ export default function Orders() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         onCancelOrder={handleCancelOrder}
+        onReturnOrder={handleReturnOrder}
+        onRefundOrder={handleRefundOrder}
       />
 
       <CreateOrderModal

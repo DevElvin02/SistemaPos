@@ -284,7 +284,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
       tax: ivaAmount,
       amount: total,
       items: totalItems,
-      status: 'pending',
+      status: 'delivered',
       orderNumber: `ORD-${Date.now()}`,
       customerName: state.customers.find(c => c.id === customerId)?.name || '',
       date: new Date().toISOString(),
