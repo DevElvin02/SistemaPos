@@ -3,6 +3,8 @@ import dotenv from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
 
+let poolInstance = null;
+
 function loadEnvironment() {
   const candidatePaths = [
     process.env.MOTOREPUESTOS_ENV_PATH,
@@ -49,31 +51,62 @@ function buildSslConfig() {
 
 const ssl = buildSslConfig();
 
-const required = ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_NAME'];
-for (const key of required) {
-  if (!process.env[key]) {
-    throw new Error(
-      `Missing environment variable: ${key}. Coloca un archivo .env valido en la carpeta de ejecucion, junto al .exe o en %ProgramData%\\Motorepuestos\\.env`
-    );
+function validateDatabaseEnvironment() {
+  const required = ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_NAME'];
+
+  for (const key of required) {
+    if (!process.env[key]) {
+      throw new Error(
+        `Missing environment variable: ${key}. Coloca un archivo .env valido en la carpeta de ejecucion, junto al .exe o en %ProgramData%\\Motorepuestos\\.env`
+      );
+    }
   }
 }
 
-export const dbPool = mysql.createPool({
-  host: process.env.DB_HOST,
-  port: Number(process.env.DB_PORT || 3306),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME,
-  connectTimeout: Number(process.env.DB_CONNECT_TIMEOUT_MS || 30000),
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 0,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  decimalNumbers: true,
-  timezone: 'Z',
-  ...(ssl ? { ssl } : {}),
-});
+function createDbPool() {
+  validateDatabaseEnvironment();
+
+  return mysql.createPool({
+    host: process.env.DB_HOST,
+    port: Number(process.env.DB_PORT || 3306),
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME,
+    connectTimeout: Number(process.env.DB_CONNECT_TIMEOUT_MS || 30000),
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 0,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    decimalNumbers: true,
+    timezone: 'Z',
+    ...(ssl ? { ssl } : {}),
+  });
+}
+
+function getDbPoolInstance() {
+  if (!poolInstance) {
+    poolInstance = createDbPool();
+  }
+
+  return poolInstance;
+}
+
+export const dbPool = {
+  query(...args) {
+    return getDbPoolInstance().query(...args);
+  },
+  execute(...args) {
+    return getDbPoolInstance().execute(...args);
+  },
+  getConnection(...args) {
+    return getDbPoolInstance().getConnection(...args);
+  },
+  end(...args) {
+    if (!poolInstance) return Promise.resolve();
+    return poolInstance.end(...args);
+  },
+};
 
 export async function pingDatabase() {
   const connection = await dbPool.getConnection();
