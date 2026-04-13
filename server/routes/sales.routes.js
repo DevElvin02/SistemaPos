@@ -428,10 +428,10 @@ router.patch('/:id/status', async (req, res, next) => {
       [targetStatus, id]
     );
 
-    const sale = await getSaleById(connection, id);
+    const updatedSale = await getSaleById(connection, id);
 
     await connection.commit();
-    res.json({ ok: true, data: sale });
+    res.json({ ok: true, data: updatedSale });
   } catch (error) {
     await connection.rollback();
     next(error);
