@@ -24,6 +24,8 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
 let serverStartPromise;
+let bootstrapStatus = 'pending';
+let bootstrapMessage = 'Inicializando servidor';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
@@ -95,19 +97,37 @@ if (hasBuiltFrontend) {
 app.use(notFoundHandler);
 app.use(errorHandler);
 
+export function getBootstrapState() {
+  return {
+    status: bootstrapStatus,
+    message: bootstrapMessage,
+  };
+}
+
 export function startApi() {
   if (!serverStartPromise) {
-    serverStartPromise = bootstrapSchema()
-      .then(() => new Promise((resolve, reject) => {
-        const server = app.listen(PORT, () => {
-          console.log(`[API] running on http://localhost:${PORT}`);
-          resolve(server);
-        });
+    serverStartPromise = new Promise((resolve, reject) => {
+      const server = app.listen(PORT, async () => {
+        console.log(`[API] running on http://localhost:${PORT}`);
 
-        server.on('error', (error) => {
-          reject(error);
-        });
-      }));
+        try {
+          await bootstrapSchema();
+          bootstrapStatus = 'ready';
+          bootstrapMessage = 'Base de datos inicializada correctamente';
+          console.log('[API] database bootstrap completed');
+        } catch (error) {
+          bootstrapStatus = 'degraded';
+          bootstrapMessage = error instanceof Error ? error.message : 'Fallo desconocido en bootstrap de base de datos';
+          console.error('[API] bootstrap failed, continuing in degraded mode', error);
+        }
+
+        resolve(server);
+      });
+
+      server.on('error', (error) => {
+        reject(error);
+      });
+    });
   }
 
   return serverStartPromise;
