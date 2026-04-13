@@ -88,29 +88,139 @@ async function nextSaleNumber(connection) {
   return `SALE-${String(maxId).padStart(6, '0')}`;
 }
 
-router.get('/', async (req, res, next) => {
-  try {
-    const [rows] = await dbPool.query(
-      `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name,
-              s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status,
-              COALESCE(SUM(si.quantity), 0) AS items
-       FROM sales s
-       LEFT JOIN customers c ON c.id = s.customer_id
-       LEFT JOIN sale_items si ON si.sale_id = s.id
-       GROUP BY s.id, s.sale_number, s.customer_id, c.name, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
-       ORDER BY s.id DESC
-       LIMIT 200`
-    );
-    console.log('[sales.routes] GET /api/sales response', {
-      count: rows.length,
-      firstRow: rows[0] ?? null,
+async function getSaleById(connection, id) {
+  const [sales] = await connection.query(
+    `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name,
+            s.sale_date, s.document_type, s.subtotal, s.discount_percent, s.discount_amount, s.tax, s.total, s.status,
+            COALESCE(SUM(si.quantity), 0) AS items
+     FROM sales s
+     LEFT JOIN customers c ON c.id = s.customer_id
+     LEFT JOIN sale_items si ON si.sale_id = s.id
+     WHERE s.id = ?
+     GROUP BY s.id, s.sale_number, s.customer_id, c.name, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
+     LIMIT 1`,
+    [id]
+  );
+
+  if (!sales.length) return null;
+
+  const [items] = await connection.query(
+    `SELECT si.product_id, COALESCE(p.name, CONCAT('Producto #', si.product_id)) AS product_name,
+            si.quantity, si.unit_price, si.discount_percent, si.discount_amount, si.base_total, si.line_total
+     FROM sale_items si
+     LEFT JOIN products p ON p.id = si.product_id
+     WHERE si.sale_id = ?
+     ORDER BY si.id ASC`,
+    [id]
+  );
+
+  return {
+    ...sales[0],
+    line_items: items.map((item) => ({
+      productId: item.product_id,
+      productName: item.product_name,
+      quantity: Number(item.quantity || 0),
+      unitPrice: Number(item.unit_price || 0),
+      baseTotal: Number(item.base_total || (Number(item.quantity || 0) * Number(item.unit_price || 0))),
+      discountPercent: Number(item.discount_percent || 0),
+      discountAmount: Number(item.discount_amount || 0),
+      lineTotal: Number(item.line_total || 0),
+    })),
+  };
+}
+
+async function attachSaleItems(connection, sales) {
+  if (!sales.length) return sales;
+
+  const saleIds = sales.map((sale) => sale.id);
+  const [items] = await connection.query(
+    `SELECT si.sale_id, si.product_id,
+            COALESCE(p.name, CONCAT('Producto #', si.product_id)) AS product_name,
+            si.quantity, si.unit_price, si.discount_percent, si.discount_amount, si.base_total, si.line_total
+     FROM sale_items si
+     LEFT JOIN products p ON p.id = si.product_id
+     WHERE si.sale_id IN (?)
+     ORDER BY si.sale_id DESC, si.id ASC`,
+    [saleIds]
+  );
+
+  const itemsBySaleId = new Map();
+  for (const item of items) {
+    const saleId = Number(item.sale_id);
+    if (!itemsBySaleId.has(saleId)) {
+      itemsBySaleId.set(saleId, []);
+    }
+
+    itemsBySaleId.get(saleId).push({
+      productId: item.product_id,
+      productName: item.product_name,
+      quantity: Number(item.quantity || 0),
+      unitPrice: Number(item.unit_price || 0),
+      baseTotal: Number(item.base_total || (Number(item.quantity || 0) * Number(item.unit_price || 0))),
+      discountPercent: Number(item.discount_percent || 0),
+      discountAmount: Number(item.discount_amount || 0),
+      lineTotal: Number(item.line_total || 0),
     });
+  }
+
+  return sales.map((sale) => ({
+    ...sale,
+    line_items: itemsBySaleId.get(Number(sale.id)) || [],
+  }));
+}
+
+async function listSales(connection, limit = 200) {
+  const [sales] = await connection.query(
+    `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name,
+            s.sale_date, s.document_type, s.subtotal, s.discount_percent, s.discount_amount, s.tax, s.total, s.status,
+            COALESCE(SUM(si.quantity), 0) AS items
+     FROM sales s
+     LEFT JOIN customers c ON c.id = s.customer_id
+     LEFT JOIN sale_items si ON si.sale_id = s.id
+     GROUP BY s.id, s.sale_number, s.customer_id, c.name, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
+     ORDER BY s.id DESC
+     LIMIT ?`,
+    [limit]
+  );
+
+  return attachSaleItems(connection, sales);
+}
+
+router.get('/', async (req, res, next) => {
+  const connection = await dbPool.getConnection();
+
+  try {
+    const rows = await listSales(connection, 200);
     res.json({ ok: true, data: rows });
   } catch (error) {
     if (isSchemaMissing(error)) {
       return res.json({ ok: true, data: [] });
     }
     next(error);
+  } finally {
+    connection.release();
+  }
+});
+
+router.get('/:id', async (req, res, next) => {
+  const connection = await dbPool.getConnection();
+
+  try {
+    const sale = await getSaleById(connection, req.params.id);
+
+    if (!sale) {
+      return res.status(404).json({ ok: false, message: 'Venta no encontrada' });
+    }
+
+    res.json({ ok: true, data: sale });
+  } catch (error) {
+    if (isSchemaMissing(error)) {
+      return res.status(404).json({ ok: false, message: 'Venta no encontrada' });
+    }
+
+    next(error);
+  } finally {
+    connection.release();
   }
 });
 
@@ -135,10 +245,18 @@ router.post('/', async (req, res, next) => {
   try {
     await connection.beginTransaction();
 
-    let subtotal = 0;
+    let rawSubtotal = 0;
+    let totalDiscountAmount = 0;
     for (const item of items) {
-      subtotal += Number(item.unitPrice) * Number(item.quantity);
+      const baseTotal = Number(item.unitPrice) * Number(item.quantity);
+      const lineDiscountPercent = Math.min(Math.max(Number(item.discountPercent || 0), 0), 100);
+      const lineDiscountAmount = Number((baseTotal * (lineDiscountPercent / 100)).toFixed(2));
+      rawSubtotal += baseTotal;
+      totalDiscountAmount += lineDiscountAmount;
     }
+
+    const discountAmount = Number(totalDiscountAmount.toFixed(2));
+    const subtotal = Number((rawSubtotal - discountAmount).toFixed(2));
 
     const tax = Number((subtotal * 0.0).toFixed(2)); // Cambia a 0.13 para calcular el IVA (13%)
     const total = Number((subtotal + tax).toFixed(2));
@@ -151,9 +269,9 @@ router.post('/', async (req, res, next) => {
 
     const [saleResult] = await connection.query(
       `INSERT INTO sales
-       (sale_number, customer_id, user_id, sale_date, document_type, subtotal, tax, total, status, notes)
-       VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, 'paid', ?)`,
-      [saleNumber, customerId || null, effectiveUserId, documentType, subtotal, tax, total, notes]
+       (sale_number, customer_id, user_id, sale_date, document_type, subtotal, discount_percent, discount_amount, tax, total, status, notes)
+       VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, 'paid', ?)` ,
+      [saleNumber, customerId || null, effectiveUserId, documentType, subtotal, 0, discountAmount, tax, total, notes]
     );
 
     const saleId = saleResult.insertId;
@@ -162,7 +280,10 @@ router.post('/', async (req, res, next) => {
       const productId = Number(item.productId);
       const quantity = Number(item.quantity);
       const unitPrice = Number(item.unitPrice);
-      const lineTotal = Number((quantity * unitPrice).toFixed(2));
+      const baseTotal = Number((quantity * unitPrice).toFixed(2));
+      const lineDiscountPercent = Math.min(Math.max(Number(item.discountPercent || 0), 0), 100);
+      const lineDiscountAmount = Number((baseTotal * (lineDiscountPercent / 100)).toFixed(2));
+      const lineTotal = Number((baseTotal - lineDiscountAmount).toFixed(2));
 
       const [invRows] = await connection.query(
         'SELECT quantity FROM inventory WHERE product_id = ? FOR UPDATE',
@@ -182,9 +303,9 @@ router.post('/', async (req, res, next) => {
 
       await connection.query(
         `INSERT INTO sale_items
-         (sale_id, product_id, quantity, unit_price, line_total)
-         VALUES (?, ?, ?, ?, ?)`,
-        [saleId, productId, quantity, unitPrice, lineTotal]
+         (sale_id, product_id, quantity, unit_price, discount_percent, discount_amount, base_total, line_total)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)` ,
+        [saleId, productId, quantity, unitPrice, lineDiscountPercent, lineDiscountAmount, baseTotal, lineTotal]
       );
 
       await connection.query(
@@ -234,6 +355,8 @@ router.post('/', async (req, res, next) => {
         saleId,
         saleNumber,
         subtotal,
+        discountPercent: 0,
+        discountAmount,
         tax,
         total,
       },
@@ -305,20 +428,10 @@ router.patch('/:id/status', async (req, res, next) => {
       [targetStatus, id]
     );
 
-    const [rows] = await connection.query(
-      `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name,
-              s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status,
-              COALESCE(SUM(si.quantity), 0) AS items
-       FROM sales s
-       LEFT JOIN customers c ON c.id = s.customer_id
-       LEFT JOIN sale_items si ON si.sale_id = s.id
-       WHERE s.id = ?
-       GROUP BY s.id, s.sale_number, s.customer_id, c.name, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status`,
-      [id]
-    );
+    const sale = await getSaleById(connection, id);
 
     await connection.commit();
-    res.json({ ok: true, data: rows[0] });
+    res.json({ ok: true, data: sale });
   } catch (error) {
     await connection.rollback();
     next(error);

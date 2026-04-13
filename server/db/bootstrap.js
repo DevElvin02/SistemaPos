@@ -250,6 +250,14 @@ export async function bootstrapSchema() {
 
   if (await tableExists('sales')) {
     await modifyColumnIfExists('sales', 'status', "status VARCHAR(20) NOT NULL DEFAULT 'delivered'");
+    await addColumnIfMissing('sales', 'discount_percent', 'discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER subtotal');
+    await addColumnIfMissing('sales', 'discount_amount', 'discount_amount DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER discount_percent');
+  }
+
+  if (await tableExists('sale_items')) {
+    await addColumnIfMissing('sale_items', 'discount_percent', 'discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER unit_price');
+    await addColumnIfMissing('sale_items', 'discount_amount', 'discount_amount DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER discount_percent');
+    await addColumnIfMissing('sale_items', 'base_total', 'base_total DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER discount_amount');
   }
 
   // Eliminar FKs hacia users en cash_sessions para permitir IDs de localStorage

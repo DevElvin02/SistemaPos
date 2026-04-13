@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { EyeOff, Plus, Search } from 'lucide-react';
 import DataTable from '@/components/admin/DataTable';
 import StatusBadge from '@/components/admin/StatusBadge';
@@ -94,9 +95,100 @@ const buildFormData = (product?: Product): ProductFormData => ({
   status: product?.status === 'inactive' ? 'inactive' : 'active',
 });
 
+function slugifySkuBase(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toUpperCase();
+}
+
+function buildSequentialSku(products: Product[], currentProductId?: string | null) {
+  const taken = new Set(
+    products
+      .filter((product) => product.id !== currentProductId)
+      .map((product) => product.sku.toUpperCase())
+  );
+
+  let counter = 1;
+  let candidate = `SKU-${String(counter).padStart(4, '0')}`;
+
+  while (taken.has(candidate)) {
+    counter += 1;
+    candidate = `SKU-${String(counter).padStart(4, '0')}`;
+  }
+
+  return candidate;
+}
+
+function generateUniqueSku(name: string, products: Product[], currentProductId?: string | null) {
+  const taken = new Set(
+    products
+      .filter((product) => product.id !== currentProductId)
+      .map((product) => product.sku.toUpperCase())
+  );
+
+  const base = slugifySkuBase(name);
+
+  if (!base) {
+    return buildSequentialSku(products, currentProductId);
+  }
+
+  if (!taken.has(base)) return base;
+
+  let counter = 2;
+  while (taken.has(`${base}-${counter}`)) {
+    counter += 1;
+  }
+
+  return `${base}-${counter}`;
+}
+
+function buildNextAutoSku(products: Product[], name: string, currentProductId?: string | null) {
+  return generateUniqueSku(name.trim(), products, currentProductId);
+}
+
+function hashToDigits(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) % 1000000000000;
+  }
+
+  return String(hash).padStart(12, '0');
+}
+
+function generateUniqueBarcode(
+  name: string,
+  sku: string,
+  products: Product[],
+  currentProductId?: string | null
+) {
+  const seed = `${sku.trim()}-${name.trim()}`.replace(/\s+/g, '-').toUpperCase() || 'PRODUCTO';
+  const taken = new Set(
+    products
+      .filter((product) => product.id !== currentProductId)
+      .map((product) => String(product.barcode ?? '').trim())
+      .filter(Boolean)
+  );
+
+  let counter = 0;
+  let candidate = hashToDigits(seed);
+
+  while (taken.has(candidate)) {
+    counter += 1;
+    candidate = hashToDigits(`${seed}-${counter}`);
+  }
+
+  return candidate;
+}
+
 export default function Products() {
   const { state, dispatch } = useAdmin();
   const { hasPermission, user } = useAuth();
+  const barcodeInputRef = useRef<HTMLInputElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStockFilter, setSelectedStockFilter] = useState('all');
@@ -104,6 +196,9 @@ export default function Products() {
   const [formMode, setFormMode] = useState<ProductFormMode>('create');
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [formData, setFormData] = useState<ProductFormData>(buildFormData());
+  const [isSkuManual, setIsSkuManual] = useState(false);
+  const [isBarcodeManual, setIsBarcodeManual] = useState(false);
+  const [isBarcodeScannerMode, setIsBarcodeScannerMode] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const canCreate = hasPermission('products.create');
@@ -179,6 +274,9 @@ export default function Products() {
     setFormMode('create');
     setSelectedProduct(null);
     setFormData(buildFormData());
+    setIsSkuManual(false);
+    setIsBarcodeManual(false);
+    setIsBarcodeScannerMode(false);
     setIsProductModalOpen(true);
   };
 
@@ -191,7 +289,97 @@ export default function Products() {
     setFormMode('edit');
     setSelectedProduct(product);
     setFormData(buildFormData(product));
+    setIsSkuManual(true);
+    setIsBarcodeManual(true);
+    setIsBarcodeScannerMode(false);
     setIsProductModalOpen(true);
+  };
+
+  useEffect(() => {
+    if (!isProductModalOpen || isSkuManual) return;
+
+    setFormData((prev) => {
+      const generatedSku = buildNextAutoSku(state.products, prev.name, selectedProduct?.id ?? null);
+      if (prev.sku === generatedSku) return prev;
+      return { ...prev, sku: generatedSku };
+    });
+  }, [formData.name, isProductModalOpen, isSkuManual, selectedProduct?.id, state.products]);
+
+  useEffect(() => {
+    if (!isProductModalOpen || isBarcodeManual) return;
+
+    setFormData((prev) => {
+      const generatedBarcode = generateUniqueBarcode(prev.name, prev.sku, state.products, selectedProduct?.id ?? null);
+      if (prev.barcode === generatedBarcode) return prev;
+      return { ...prev, barcode: generatedBarcode };
+    });
+  }, [formData.name, formData.sku, isBarcodeManual, isProductModalOpen, selectedProduct?.id, state.products]);
+
+  const handleGenerateSku = () => {
+    const nextSku = buildNextAutoSku(state.products, formData.name, selectedProduct?.id ?? null);
+    setIsSkuManual(false);
+    setFormData((prev) => ({
+      ...prev,
+      sku: nextSku,
+    }));
+    toast.success(`SKU generado: ${nextSku}`);
+  };
+
+  const handleGenerateBarcode = () => {
+    setIsBarcodeManual(false);
+    setIsBarcodeScannerMode(false);
+    setFormData((prev) => ({
+      ...prev,
+      barcode: generateUniqueBarcode(prev.name, prev.sku, state.products, selectedProduct?.id ?? null),
+    }));
+  };
+
+  const playScannerSuccessTone = () => {
+    if (typeof window === 'undefined' || typeof AudioContext === 'undefined') return;
+
+    const audioContext = audioContextRef.current ?? new AudioContext();
+    audioContextRef.current = audioContext;
+
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+
+    oscillator.type = 'sine';
+    oscillator.frequency.value = 920;
+    gain.gain.value = 0.001;
+
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+
+    const startAt = audioContext.currentTime;
+    gain.gain.exponentialRampToValueAtTime(0.08, startAt + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.12);
+
+    oscillator.start(startAt);
+    oscillator.stop(startAt + 0.12);
+  };
+
+  const finalizeScannedBarcode = () => {
+    const normalizedBarcode = formData.barcode.trim();
+    if (!normalizedBarcode) return;
+
+    setIsBarcodeManual(true);
+    setIsBarcodeScannerMode(false);
+    setFormData((prev) => {
+      if (prev.barcode === normalizedBarcode) return prev;
+      return { ...prev, barcode: normalizedBarcode };
+    });
+    playScannerSuccessTone();
+    toast.success('Codigo capturado desde el scanner');
+  };
+
+  const handleArmBarcodeScanner = () => {
+    setIsBarcodeScannerMode(true);
+    setIsBarcodeManual(true);
+    setFormData((prev) => ({ ...prev, barcode: '' }));
+    window.setTimeout(() => {
+      barcodeInputRef.current?.focus();
+      barcodeInputRef.current?.select();
+    }, 0);
   };
 
   const handleSaveProduct = async () => {
@@ -204,8 +392,9 @@ export default function Products() {
     const parsedCost = parseFloat(formData.cost);
     const parsedStock = parseInt(formData.stock, 10);
     const parsedMinStock = parseInt(formData.minStock, 10);
+    const resolvedSku = formData.sku.trim() || buildNextAutoSku(state.products, formData.name, selectedProduct?.id ?? null);
 
-    if (!formData.name || !formData.category || !formData.sku || !formData.barcode) {
+    if (!formData.name || !formData.category || !formData.barcode) {
       toast.error('Completa nombre, categoria, codigo de barras y SKU');
       return;
     }
@@ -230,7 +419,7 @@ export default function Products() {
     const body = {
       name: formData.name.trim(),
       category: formData.category.trim(),
-      sku: formData.sku.trim(),
+      sku: resolvedSku,
       barcode: formData.barcode.trim() || null,
       sale_price: parsedPrice,
       cost_price: parsedCost,
@@ -492,30 +681,30 @@ export default function Products() {
 
       <DataTable columns={columns} data={filteredProducts} />
 
-      {isProductModalOpen && (
-        <div className="fixed inset-0 z-[120] bg-black/55 overflow-y-auto" onClick={() => setIsProductModalOpen(false)}>
+      {isProductModalOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[220] bg-black/55 overflow-y-auto" onClick={() => setIsProductModalOpen(false)}>
           <div className="min-h-full w-full flex items-start justify-center p-3 sm:p-6">
             <div
               className="bg-card rounded-2xl shadow-2xl border border-border/70 w-full max-w-4xl max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-3rem)] overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-            <div className="sticky top-0 z-10 bg-gradient-to-r from-primary to-primary/90 text-primary-foreground px-5 pt-5 pb-4 border-b border-border/50 flex items-center justify-between">
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold tracking-tight">{formMode === 'create' ? 'Nuevo Producto' : 'Editar Producto'}</h2>
-                <p className="text-sm text-primary-foreground/85">Completa la ficha del producto</p>
+              <div className="sticky top-0 z-10 bg-gradient-to-r from-primary to-primary/90 text-primary-foreground px-5 pt-5 pb-4 border-b border-border/50 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight">{formMode === 'create' ? 'Nuevo Producto' : 'Editar Producto'}</h2>
+                  <p className="text-sm text-primary-foreground/85">Completa la ficha del producto</p>
+                </div>
+                <button onClick={() => setIsProductModalOpen(false)} className="text-primary-foreground hover:bg-primary/70 p-2 rounded-xl transition">✕</button>
               </div>
-              <button onClick={() => setIsProductModalOpen(false)} className="text-primary-foreground hover:bg-primary/70 p-2 rounded-xl transition">✕</button>
-            </div>
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void handleSaveProduct();
-              }}
-              className="flex flex-col max-h-[calc(100vh-8.5rem)] sm:max-h-[calc(100vh-10rem)] min-h-0"
-            >
-              <div className="p-4 sm:p-5 overflow-y-auto min-h-0">
-                <div className="rounded-xl border border-border/70 bg-muted/20 p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleSaveProduct();
+                }}
+                className="flex flex-col max-h-[calc(100vh-8.5rem)] sm:max-h-[calc(100vh-10rem)] min-h-0"
+              >
+                <div className="p-4 sm:p-5 overflow-y-auto min-h-0">
+                  <div className="rounded-xl border border-border/70 bg-muted/20 p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-semibold mb-1">Nombre</label>
                       <input
@@ -579,21 +768,69 @@ export default function Products() {
 
                     <div>
                       <label className="block text-sm font-semibold mb-1">SKU</label>
-                      <input
-                        type="text"
-                        value={formData.sku}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, sku: e.target.value }))}
-                        className="w-full px-3 py-2.5 border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={formData.sku}
+                          onChange={(e) => {
+                            setIsSkuManual(true);
+                            setFormData((prev) => ({ ...prev, sku: e.target.value }));
+                          }}
+                          className="w-full px-3 py-2.5 border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleGenerateSku}
+                          className="px-3 py-2.5 rounded-xl border border-border hover:bg-muted transition whitespace-nowrap"
+                          title="Generar SKU automaticamente"
+                        >
+                          Auto
+                        </button>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">Se genera automáticamente desde el nombre, pero puedes escribirlo manualmente.</p>
                     </div>
                     <div>
                       <label className="block text-sm font-semibold mb-1">Codigo de barras</label>
-                      <input
-                        type="text"
-                        value={formData.barcode}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, barcode: e.target.value }))}
-                        className="w-full px-3 py-2.5 border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          ref={barcodeInputRef}
+                          type="text"
+                          value={formData.barcode}
+                          onFocus={() => setIsBarcodeScannerMode(true)}
+                          onChange={(e) => {
+                            setIsBarcodeManual(true);
+                            setFormData((prev) => ({ ...prev, barcode: e.target.value }));
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              finalizeScannedBarcode();
+                            }
+                          }}
+                          onBlur={() => {
+                            if (isBarcodeScannerMode) {
+                              finalizeScannedBarcode();
+                            }
+                          }}
+                          className="w-full px-3 py-2.5 border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleGenerateBarcode}
+                          className="px-3 py-2.5 rounded-xl border border-border hover:bg-muted transition whitespace-nowrap"
+                          title="Generar codigo automaticamente"
+                        >
+                          Auto
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleArmBarcodeScanner}
+                          className="px-3 py-2.5 rounded-xl border border-border hover:bg-muted transition whitespace-nowrap"
+                        >
+                          Escanear
+                        </button>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">{isBarcodeScannerMode ? 'Modo scanner activo: al detectar Enter se confirmara el codigo y sonara una alerta breve.' : 'Puedes escribirlo manualmente, generarlo con Auto o usar Escanear con lector USB.'}</p>
                     </div>
 
                     <div className="md:col-span-2">
@@ -618,17 +855,18 @@ export default function Products() {
                         <option value="inactive">Inactivo</option>
                       </select>
                     </div>
+                  </div>
                 </div>
-              </div>
 
-              <div className="bg-muted/50 border-t p-4 flex justify-end gap-3">
-                <button type="button" onClick={() => setIsProductModalOpen(false)} className="px-4 py-2 rounded-lg border border-border hover:bg-muted transition">Cancelar</button>
-                <button type="submit" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition">Guardar</button>
-              </div>
-            </form>
+                <div className="bg-muted/50 border-t p-4 flex justify-end gap-3">
+                  <button type="button" onClick={() => setIsProductModalOpen(false)} className="px-4 py-2 rounded-lg border border-border hover:bg-muted transition">Cancelar</button>
+                  <button type="submit" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition">Guardar</button>
+                </div>
+              </form>
+            </div>
           </div>
-          </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <DeleteConfirmModal

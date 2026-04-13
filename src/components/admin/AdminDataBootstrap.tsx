@@ -7,7 +7,7 @@ import type { Customer } from '@/lib/data/customers';
 import type { Category } from '@/lib/data/categories';
 import type { Supplier } from '@/lib/data/suppliers';
 import type { InventoryItem, KardexMovement } from '@/lib/data/inventory';
-import { normalizeOrderStatus, type Order } from '@/lib/data/orders';
+import { normalizeOrderStatus, parseOrderLines, type Order } from '@/lib/data/orders';
 import type { Purchase } from '@/lib/data/purchases';
 import type { CashSession, CashMovement } from '@/lib/data/cash-register';
 
@@ -120,9 +120,14 @@ function mapOrder(row: Record<string, unknown>): Order {
     orderNumber: String(row.sale_number ?? ''),
     customerId: String(row.customer_id ?? ''),
     customerName: String(row.customer_name ?? 'Consumidor final'),
+    subtotal: Number(row.subtotal ?? 0),
+    tax: Number(row.tax ?? 0),
+    discountPercent: Number(row.discount_percent ?? row.discountPercent ?? 0),
+    discountAmount: Number(row.discount_amount ?? row.discountAmount ?? 0),
     amount: Number(row.total ?? 0),
     status: normalizeOrderStatus(row.status),
     items: Number(row.items ?? 0),
+    lines: parseOrderLines(row.line_items ?? row.lines),
     date: row.sale_date ? new Date(String(row.sale_date)) : new Date(),
   };
 }
@@ -215,15 +220,6 @@ export default function AdminDataBootstrap() {
       dispatch({ type: 'SET_INVENTORY', payload: inventory.map(mapInventory) });
       dispatch({ type: 'SET_ORDERS', payload: orders.map(mapOrder) });
       dispatch({ type: 'SET_CASH_SESSIONS', payload: cashSessions });
-
-      console.log('[AdminDataBootstrap] critical modules loaded', {
-        products: products.length,
-        customers: customers.length,
-        inventory: inventory.length,
-        orders: orders.length,
-        cashSessions: sessions.length,
-        cashMovements: movements.length,
-      });
     };
 
     const loadDeferredData = async () => {
@@ -240,13 +236,6 @@ export default function AdminDataBootstrap() {
       dispatch({ type: 'SET_SUPPLIERS', payload: suppliers.map(mapSupplier) });
       dispatch({ type: 'SET_KARDEX', payload: kardex.map(mapKardex) });
       dispatch({ type: 'SET_PURCHASES', payload: purchases.map(mapPurchase) });
-
-      console.log('[AdminDataBootstrap] secondary modules loaded', {
-        categories: categories.length,
-        suppliers: suppliers.length,
-        kardex: kardex.length,
-        purchases: purchases.length,
-      });
     };
 
     loadCriticalData()

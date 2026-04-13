@@ -1,8 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { FileDown } from 'lucide-react';
 import { BarChart, Bar, CartesianGrid, LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import StatusBadge from '@/components/admin/StatusBadge';
 import { useAdmin } from '@/context/AdminContext';
 import { isInventoryReversalStatus } from '@/lib/data/orders';
+import { useCompanySettings } from '@/hooks/use-company-settings';
 
 interface OrderLineLike {
   productId: string;
@@ -30,6 +32,8 @@ const dayFormatter = new Intl.DateTimeFormat('es-SV', { day: '2-digit', month: '
 
 export default function Reports() {
   const { state } = useAdmin();
+  const { companySettings } = useCompanySettings();
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const orders = state.orders as unknown as OrderWithLines[];
 
@@ -181,11 +185,154 @@ export default function Reports() {
     [validSales]
   );
 
+  const handleGeneratePdf = async () => {
+    setIsGeneratingPdf(true);
+
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const marginX = 14;
+      const maxWidth = pageWidth - marginX * 2;
+      const lineHeight = 6;
+      let y = 16;
+
+      const ensureSpace = (requiredHeight = 12) => {
+        if (y + requiredHeight <= pageHeight - 16) return;
+        doc.addPage();
+        y = 16;
+      };
+
+      const writeSectionTitle = (title: string) => {
+        ensureSpace(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.text(title, marginX, y);
+        y += 7;
+      };
+
+      const writeRow = (label: string, value: string) => {
+        ensureSpace(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text(label, marginX, y);
+        doc.text(value, pageWidth - marginX, y, { align: 'right' });
+        y += lineHeight;
+      };
+
+      const writeTable = (title: string, headers: string[], rows: string[][]) => {
+        writeSectionTitle(title);
+        ensureSpace(10);
+
+        const colWidth = maxWidth / headers.length;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+
+        headers.forEach((header, index) => {
+          doc.text(header, marginX + index * colWidth, y);
+        });
+
+        y += 5;
+        doc.setDrawColor(210, 214, 220);
+        doc.line(marginX, y, pageWidth - marginX, y);
+        y += 5;
+
+        doc.setFont('helvetica', 'normal');
+        rows.forEach((row) => {
+          ensureSpace(8);
+          row.forEach((cell, index) => {
+            const text = doc.splitTextToSize(cell, colWidth - 2);
+            doc.text(text, marginX + index * colWidth, y);
+          });
+          y += 6;
+        });
+
+        y += 4;
+      };
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text(companySettings.companyName || 'MOTOREPUESTOS', marginX, y);
+      y += 7;
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(11);
+      doc.text('Reporte gerencial', marginX, y);
+      y += 5;
+      doc.setFontSize(9);
+      doc.text(`Generado: ${new Date().toLocaleString('es-SV')}`, marginX, y);
+      y += 10;
+
+      writeSectionTitle('Resumen financiero');
+      writeRow('Ventas acumuladas', formatCurrency(financialSummary.salesRevenue));
+      writeRow('Ganancia bruta estimada', formatCurrency(financialSummary.grossProfit));
+      writeRow('Margen bruto', `${financialSummary.grossMargin.toFixed(1)}%`);
+      writeRow('Costo de compras', formatCurrency(financialSummary.purchaseCost));
+      writeRow('Costo de mercaderia vendida', formatCurrency(financialSummary.estimatedCostOfGoods));
+      writeRow('Flujo neto', formatCurrency(financialSummary.netCashFlow));
+
+      writeTable(
+        'Ventas diarias (ultimos 14 dias)',
+        ['Fecha', 'Total'],
+        dailySales.map((item) => [item.date, formatCurrency(item.total)])
+      );
+
+      writeTable(
+        'Ventas mensuales (ultimos 12 meses)',
+        ['Mes', 'Total'],
+        monthlySales.map((item) => [item.month, formatCurrency(item.total)])
+      );
+
+      writeTable(
+        'Productos mas vendidos',
+        ['Producto', 'Cantidad', 'Ingreso'],
+        soldByProduct.length > 0
+          ? soldByProduct.map((item) => [item.productName, String(item.quantity), formatCurrency(item.revenue)])
+          : [['Sin datos', '-', '-']]
+      );
+
+      writeTable(
+        'Inventario bajo',
+        ['Producto', 'Actual', 'Minimo', 'Estado'],
+        lowInventory.length > 0
+          ? lowInventory.map((item) => [item.productName, String(item.quantity), String(item.minLevel), item.status])
+          : [['Sin alertas', '-', '-', '-']]
+      );
+
+      writeTable(
+        'Historial reciente de ventas',
+        ['Orden', 'Cliente', 'Monto', 'Estado'],
+        salesHistory.slice(0, 12).map((order) => [
+          order.orderNumber,
+          order.customerName,
+          formatCurrency(order.amount),
+          order.status,
+        ])
+      );
+
+      doc.save(`Reporte-Gerencial-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   return (
     <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Reportes</h1>
-        <p className="text-muted-foreground mt-1">Analisis del negocio en tiempo real</p>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Reportes</h1>
+          <p className="text-muted-foreground mt-1">Analisis del negocio en tiempo real</p>
+        </div>
+        <button
+          onClick={handleGeneratePdf}
+          disabled={isGeneratingPdf}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <FileDown className="h-4 w-4" />
+          {isGeneratingPdf ? 'Generando PDF...' : 'Generar PDF'}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">

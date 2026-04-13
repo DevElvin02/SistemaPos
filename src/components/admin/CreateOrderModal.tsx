@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { useAdmin } from '@/context/AdminContext'
@@ -18,19 +18,38 @@ const IVA_RATE = 0.0 // Cambia al porcentaje de IVA que corresponda, por ejemplo
 export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrderModalProps) {
   const { state } = useAdmin()
   const { companySettings } = useCompanySettings()
+  const barcodeInputRef = useRef<HTMLInputElement | null>(null)
+  const scannerBufferRef = useRef('')
+  const scannerResetTimerRef = useRef<number | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
   const [customerId, setCustomerId] = useState('')
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [barcodeInput, setBarcodeInput] = useState('')
+  const [isScannerMode, setIsScannerMode] = useState(false)
   const [selectedProductId, setSelectedProductId] = useState('')
   const [unitPrice, setUnitPrice] = useState('')
   const [quantity, setQuantity] = useState('1')
+  const [lineDiscountPercent, setLineDiscountPercent] = useState('0')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
   const [documentType, setDocumentType] = useState<DocumentType>('ticket')
   const [amountReceived, setAmountReceived] = useState('')
   const [printTicket, setPrintTicket] = useState(true)
+  const [isCustomerSuggestionsOpen, setIsCustomerSuggestionsOpen] = useState(false)
+  const [isProductSuggestionsOpen, setIsProductSuggestionsOpen] = useState(false)
   const [lineItems, setLineItems] = useState<
-    Array<{ id: string; productId: string; productName: string; sku: string; unitPrice: number; quantity: number; subtotal: number }>
+    Array<{ id: string; productId: string; productName: string; sku: string; unitPrice: number; quantity: number; baseTotal: number; discountPercent: number; discountAmount: number; subtotal: number }>
   >([])
+
+  const filteredCustomers = useMemo(
+    () =>
+      state.customers.filter((customer) => {
+        const needle = customerSearchTerm.trim().toLowerCase()
+        if (!needle) return true
+        return customer.name.toLowerCase().includes(needle) || customer.email.toLowerCase().includes(needle) || customer.phone.toLowerCase().includes(needle)
+      }).slice(0, 8),
+    [customerSearchTerm, state.customers]
+  )
 
   const filteredProducts = useMemo(
     () =>
@@ -38,16 +57,24 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
         const needle = searchTerm.trim().toLowerCase()
         if (!needle) return true
         return p.name.toLowerCase().includes(needle) || p.sku.toLowerCase().includes(needle) || (p.barcode ?? '').toLowerCase().includes(needle)
-      }),
+      }).slice(0, 8),
     [searchTerm, state.products]
   )
 
-  const subtotal = useMemo(
+  const grossSubtotal = useMemo(
+    () => lineItems.reduce((acc, item) => acc + item.baseTotal, 0),
+    [lineItems]
+  )
+  const discountAmount = useMemo(
+    () => lineItems.reduce((acc, item) => acc + item.discountAmount, 0),
+    [lineItems]
+  )
+  const discountedSubtotal = useMemo(
     () => lineItems.reduce((acc, item) => acc + item.subtotal, 0),
     [lineItems]
   )
-  const ivaAmount = useMemo(() => subtotal * IVA_RATE, [subtotal])
-  const total = useMemo(() => subtotal + ivaAmount, [subtotal, ivaAmount])
+  const ivaAmount = useMemo(() => discountedSubtotal * IVA_RATE, [discountedSubtotal])
+  const total = useMemo(() => discountedSubtotal + ivaAmount, [discountedSubtotal, ivaAmount])
   const totalItems = useMemo(
     () => lineItems.reduce((acc, item) => acc + item.quantity, 0),
     [lineItems]
@@ -61,29 +88,46 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
 
   const resetForm = () => {
     setCustomerId('')
+    setCustomerSearchTerm('')
     setSearchTerm('')
     setBarcodeInput('')
+    scannerBufferRef.current = ''
     setSelectedProductId('')
     setUnitPrice('')
     setQuantity('1')
+    setLineDiscountPercent('0')
     setPaymentMethod('cash')
     setDocumentType('ticket')
     setAmountReceived('')
     setPrintTicket(true)
+    setIsScannerMode(false)
+    setIsCustomerSuggestionsOpen(false)
+    setIsProductSuggestionsOpen(false)
     setLineItems([])
   }
 
-  const addLineItem = (productId: string, productName: string, sku: string, price: number, qty: number) => {
+  const addLineItem = (productId: string, productName: string, sku: string, price: number, qty: number, discountPercentValue: number) => {
     setLineItems((prev) => {
+      const baseTotal = price * qty
+      const discountAmountValue = Number((baseTotal * (discountPercentValue / 100)).toFixed(2))
+      const subtotalValue = Number((baseTotal - discountAmountValue).toFixed(2))
       const existing = prev.find((item) => item.productId === productId)
       if (existing) {
+        const mergedQuantity = existing.quantity + qty
+        const mergedBaseTotal = Number((mergedQuantity * price).toFixed(2))
+        const mergedDiscountPercent = discountPercentValue
+        const mergedDiscountAmount = Number((mergedBaseTotal * (mergedDiscountPercent / 100)).toFixed(2))
+        const mergedSubtotal = Number((mergedBaseTotal - mergedDiscountAmount).toFixed(2))
         return prev.map((item) =>
           item.productId === productId
             ? {
                 ...item,
-                quantity: item.quantity + qty,
+                quantity: mergedQuantity,
                 unitPrice: price,
-                subtotal: (item.quantity + qty) * price,
+                baseTotal: mergedBaseTotal,
+                discountPercent: mergedDiscountPercent,
+                discountAmount: mergedDiscountAmount,
+                subtotal: mergedSubtotal,
               }
             : item
         )
@@ -98,7 +142,10 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
           sku,
           unitPrice: price,
           quantity: qty,
-          subtotal: price * qty,
+          baseTotal,
+          discountPercent: discountPercentValue,
+          discountAmount: discountAmountValue,
+          subtotal: subtotalValue,
         },
       ]
     })
@@ -107,13 +154,23 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
   const handleProductChange = (productId: string) => {
     setSelectedProductId(productId)
     const selectedProduct = state.products.find((p) => p.id === productId)
+    setSearchTerm(selectedProduct?.name ?? '')
     setUnitPrice(selectedProduct ? selectedProduct.price.toFixed(2) : '')
+    setIsProductSuggestionsOpen(false)
+  }
+
+  const handleCustomerChange = (customerIdValue: string) => {
+    setCustomerId(customerIdValue)
+    const selectedCustomer = state.customers.find((customer) => customer.id === customerIdValue)
+    setCustomerSearchTerm(selectedCustomer?.name ?? '')
+    setIsCustomerSuggestionsOpen(false)
   }
 
   const handleAddProduct = () => {
     const selectedProduct = state.products.find((p) => p.id === selectedProductId)
     const parsedPrice = parseFloat(unitPrice)
     const parsedQuantity = parseInt(quantity)
+    const parsedDiscountPercent = parseFloat(lineDiscountPercent)
 
     if (!selectedProduct) {
       toast.error('Selecciona un producto')
@@ -130,12 +187,19 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
       return
     }
 
-    addLineItem(selectedProduct.id, selectedProduct.name, selectedProduct.sku, parsedPrice, parsedQuantity)
+    if (Number.isNaN(parsedDiscountPercent) || parsedDiscountPercent < 0 || parsedDiscountPercent > 100) {
+      toast.error('Ingresa un descuento válido entre 0 y 100')
+      return
+    }
+
+    addLineItem(selectedProduct.id, selectedProduct.name, selectedProduct.sku, parsedPrice, parsedQuantity, parsedDiscountPercent)
 
     setSelectedProductId('')
     setUnitPrice('')
     setQuantity('1')
+    setLineDiscountPercent('0')
     setSearchTerm('')
+    setIsProductSuggestionsOpen(false)
   }
 
   const handleBarcodeAdd = () => {
@@ -151,9 +215,60 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
       return
     }
 
-    addLineItem(found.id, found.name, found.sku, found.price, 1)
+    addLineItem(found.id, found.name, found.sku, found.price, 1, 0)
     setBarcodeInput('')
+    scannerBufferRef.current = ''
+    playScanSuccessTone()
     toast.success(`Agregado: ${found.name}`)
+  }
+
+  const playScanSuccessTone = () => {
+    if (typeof window === 'undefined') return
+
+    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioContextClass) return
+
+    const audioContext = audioContextRef.current ?? new AudioContextClass()
+    audioContextRef.current = audioContext
+
+    const oscillator = audioContext.createOscillator()
+    const gainNode = audioContext.createGain()
+    const startAt = audioContext.currentTime
+
+    oscillator.type = 'sine'
+    oscillator.frequency.setValueAtTime(880, startAt)
+    oscillator.frequency.exponentialRampToValueAtTime(1320, startAt + 0.08)
+
+    gainNode.gain.setValueAtTime(0.001, startAt)
+    gainNode.gain.exponentialRampToValueAtTime(0.08, startAt + 0.02)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, startAt + 0.12)
+
+    oscillator.connect(gainNode)
+    gainNode.connect(audioContext.destination)
+    oscillator.start(startAt)
+    oscillator.stop(startAt + 0.12)
+  }
+
+  const armUsbScanner = () => {
+    setIsScannerMode(true)
+    setBarcodeInput('')
+    scannerBufferRef.current = ''
+    window.setTimeout(() => {
+      barcodeInputRef.current?.focus()
+      barcodeInputRef.current?.select()
+    }, 0)
+  }
+
+  const commitScannerBuffer = () => {
+    const capturedValue = scannerBufferRef.current.trim()
+    if (!capturedValue) return
+
+    setBarcodeInput(capturedValue)
+    scannerBufferRef.current = capturedValue
+
+    window.setTimeout(() => {
+      handleBarcodeAdd()
+    }, 0)
   }
 
   const handleRemoveLine = (lineId: string) => {
@@ -173,6 +288,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
             <td>${line.productName}</td>
             <td style="text-align:center">${line.quantity}</td>
             <td style="text-align:right">${formatCurrency(line.unitPrice)}</td>
+            <td style="text-align:right">${line.discountPercent.toFixed(2)}%</td>
             <td style="text-align:right">${formatCurrency(line.subtotal)}</td>
           </tr>
         `
@@ -208,13 +324,16 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
                 <th style="text-align:left">Producto</th>
                 <th style="text-align:center">Cant.</th>
                 <th style="text-align:right">P/U</th>
-                <th style="text-align:right">Subtotal</th>
+                <th style="text-align:right">Desc.</th>
+                <th style="text-align:right">Importe</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
           </table>
 
-          <p class="total">Subtotal: ${formatCurrency(order.subtotal)}</p>
+          <p class="total">Subtotal: ${formatCurrency(order.grossSubtotal ?? order.subtotal + (order.discountAmount || 0))}</p>
+          ${order.discountAmount > 0 ? `<p class="total">Descuento total: -${formatCurrency(order.discountAmount)}</p>` : ''}
+          <p class="total">Subtotal con descuento: ${formatCurrency(order.subtotal)}</p>
           <p class="total">IVA (0%): ${formatCurrency(order.tax)}</p>
           <p class="total">Total: ${formatCurrency(order.amount)}</p>
           ${
@@ -245,11 +364,45 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
         const form = document.getElementById('pos-sale-form') as HTMLFormElement | null
         form?.requestSubmit()
       }
+
+      if (!isScannerMode) return
+
+      if (event.key === 'Escape') {
+        setIsScannerMode(false)
+        setBarcodeInput('')
+        scannerBufferRef.current = ''
+        return
+      }
+
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        commitScannerBuffer()
+        return
+      }
+
+      if (event.key.length !== 1) return
+      if (event.ctrlKey || event.metaKey || event.altKey) return
+
+      scannerBufferRef.current += event.key
+      setBarcodeInput(scannerBufferRef.current)
+
+      if (scannerResetTimerRef.current) {
+        window.clearTimeout(scannerResetTimerRef.current)
+      }
+
+      scannerResetTimerRef.current = window.setTimeout(() => {
+        scannerBufferRef.current = ''
+      }, 150)
     }
 
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  })
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      if (scannerResetTimerRef.current) {
+        window.clearTimeout(scannerResetTimerRef.current)
+      }
+    }
+  }, [isOpen, isScannerMode])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -280,8 +433,10 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
     const newOrder = {
       id: Date.now().toString(),
       customerId,
-      subtotal,
+      grossSubtotal,
+      subtotal: discountedSubtotal,
       tax: ivaAmount,
+      discountAmount,
       amount: total,
       items: totalItems,
       status: 'delivered',
@@ -337,39 +492,83 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
             <div className="xl:col-span-2 space-y-4">
               <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
                 <label className="block text-sm font-semibold mb-2">Cliente</label>
-                <select
-                  value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary bg-background"
-                >
-                  <option value="">Seleccionar cliente...</option>
-                  {state.customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={customerSearchTerm}
+                    onChange={(e) => {
+                      setCustomerSearchTerm(e.target.value)
+                      setCustomerId('')
+                      setIsCustomerSuggestionsOpen(true)
+                    }}
+                    onFocus={() => setIsCustomerSuggestionsOpen(true)}
+                    className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary bg-background"
+                    placeholder="Escribe el nombre del cliente"
+                  />
+
+                  {isCustomerSuggestionsOpen && customerSearchTerm.trim() && filteredCustomers.length > 0 && (
+                    <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-border bg-background shadow-lg">
+                      {filteredCustomers.map((customer) => (
+                        <button
+                          key={customer.id}
+                          type="button"
+                          onMouseDown={() => handleCustomerChange(customer.id)}
+                          className="flex w-full flex-col px-3 py-2 text-left hover:bg-muted transition"
+                        >
+                          <span className="font-medium text-secondary">{customer.name}</span>
+                          <span className="text-xs text-muted-foreground">{customer.email} {customer.phone ? `• ${customer.phone}` : ''}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="rounded-xl border border-border/70 bg-muted/30 p-4 space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-semibold mb-1">Buscar producto</label>
-                    <input
-                      type="text"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-                      placeholder="Nombre, SKU o código"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => {
+                          setSearchTerm(e.target.value)
+                          setSelectedProductId('')
+                          setUnitPrice('')
+                          setIsProductSuggestionsOpen(true)
+                        }}
+                        onFocus={() => setIsProductSuggestionsOpen(true)}
+                        className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="Nombre, SKU o código"
+                      />
+
+                      {isProductSuggestionsOpen && searchTerm.trim() && filteredProducts.length > 0 && (
+                        <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-border bg-background shadow-lg">
+                          {filteredProducts.map((product) => (
+                            <button
+                              key={product.id}
+                              type="button"
+                              onMouseDown={() => handleProductChange(product.id)}
+                              className="flex w-full flex-col px-3 py-2 text-left hover:bg-muted transition"
+                            >
+                              <span className="font-medium text-secondary">{product.name}</span>
+                              <span className="text-xs text-muted-foreground">SKU: {product.sku} • Precio: ${product.price.toFixed(2)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-semibold mb-1">Escaneo de código de barras</label>
                     <div className="flex gap-2">
                       <input
+                        ref={barcodeInputRef}
                         type="text"
                         value={barcodeInput}
                         onChange={(e) => setBarcodeInput(e.target.value)}
+                        onFocus={() => setIsScannerMode(true)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault()
@@ -381,32 +580,19 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
                       />
                       <button
                         type="button"
-                        onClick={handleBarcodeAdd}
+                        onClick={armUsbScanner}
                         className="px-3 py-2.5 rounded-xl border border-border hover:bg-muted transition font-medium"
                       >
                         Escanear
                       </button>
                     </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {isScannerMode ? 'Modo scanner activo: lee el codigo con el lector USB.' : 'Haz clic en Escanear para capturar una lectura desde el scanner USB.'}
+                    </p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-semibold mb-1">Producto</label>
-                    <select
-                      value={selectedProductId}
-                      onChange={(e) => handleProductChange(e.target.value)}
-                      className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary bg-background"
-                    >
-                      <option value="">Seleccionar producto...</option>
-                      {filteredProducts.map((product) => (
-                        <option key={product.id} value={product.id}>
-                          {product.name} ({product.sku})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
                   <div>
                     <label className="block text-sm font-semibold mb-1">Precio unitario</label>
                     <input
@@ -431,6 +617,20 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-semibold mb-1">Desc. %</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      value={lineDiscountPercent}
+                      onChange={(e) => setLineDiscountPercent(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="0"
+                    />
+                  </div>
+
                   <div className="md:min-w-[120px]">
                     <button
                       type="button"
@@ -446,30 +646,32 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
               <div className="border border-border/70 rounded-xl overflow-hidden bg-card">
                 <div className="overflow-x-auto">
                   <div className="min-w-[680px]">
-                    <div className="grid grid-cols-12 gap-2 px-3 py-2.5 bg-muted/50 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                      <span className="col-span-5">Producto</span>
+                    <div className="grid grid-cols-14 gap-2 px-3 py-2.5 bg-muted/50 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                      <span className="col-span-4">Producto</span>
                       <span className="col-span-2 text-right">Precio</span>
                       <span className="col-span-2 text-right">Cantidad</span>
+                      <span className="col-span-2 text-right">Desc. %</span>
                       <span className="col-span-2 text-right">Subtotal</span>
-                      <span className="col-span-1 text-right">Acción</span>
+                      <span className="col-span-2 text-right">Acción</span>
                     </div>
 
                     {lineItems.length === 0 ? (
                       <p className="px-4 py-10 text-sm text-muted-foreground text-center">No hay productos agregados.</p>
                     ) : (
                       lineItems.map((line) => (
-                        <div key={line.id} className="grid grid-cols-12 gap-2 px-3 py-3 border-t border-border/70 text-sm items-center">
-                          <span className="col-span-5 font-medium text-secondary">
+                        <div key={line.id} className="grid grid-cols-14 gap-2 px-3 py-3 border-t border-border/70 text-sm items-center">
+                          <span className="col-span-4 font-medium text-secondary">
                             {line.productName}
                             <span className="ml-2 text-xs text-muted-foreground">{line.sku}</span>
                           </span>
                           <span className="col-span-2 text-right">${line.unitPrice.toFixed(2)}</span>
                           <span className="col-span-2 text-right">{line.quantity}</span>
+                          <span className="col-span-2 text-right">{line.discountPercent.toFixed(2)}%</span>
                           <span className="col-span-2 text-right font-semibold">${line.subtotal.toFixed(2)}</span>
                           <button
                             type="button"
                             onClick={() => handleRemoveLine(line.id)}
-                            className="col-span-1 text-right text-destructive hover:underline"
+                            className="col-span-2 text-right text-destructive hover:underline"
                           >
                             Quitar
                           </button>
@@ -542,7 +744,9 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
 
                 <div className="rounded-xl border border-border bg-card p-3 text-sm space-y-1">
                   <p className="text-muted-foreground">Total de artículos: <span className="font-medium text-secondary">{totalItems}</span></p>
-                  <p className="text-muted-foreground">Subtotal: <span className="font-medium text-secondary">{formatCurrency(subtotal)}</span></p>
+                  <p className="text-muted-foreground">Subtotal bruto: <span className="font-medium text-secondary">{formatCurrency(grossSubtotal)}</span></p>
+                  <p className="text-muted-foreground">Descuento total: <span className="font-medium text-secondary">-{formatCurrency(discountAmount)}</span></p>
+                  <p className="text-muted-foreground">Subtotal con descuento: <span className="font-medium text-secondary">{formatCurrency(discountedSubtotal)}</span></p>
                   <p className="text-muted-foreground">IVA (0%): <span className="font-medium text-secondary">{formatCurrency(ivaAmount)}</span></p>
                   <p className="text-xl font-bold text-secondary pt-1">Total: {formatCurrency(total)}</p>
                 </div>

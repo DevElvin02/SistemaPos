@@ -5,7 +5,7 @@ import StatusBadge from '@/components/admin/StatusBadge';
 import { OrderDetailModal } from '@/components/admin/OrderModals';
 import { OrderActionButtons } from '@/components/admin/OrderActionButtons';
 import { CreateOrderModal } from '@/components/admin/CreateOrderModal';
-import { Order, canCancelOrder, canRefundOrder, canReturnOrder, isInventoryReversalStatus, normalizeOrderStatus } from '@/lib/data/orders';
+import { Order, canCancelOrder, canRefundOrder, canReturnOrder, isInventoryReversalStatus, normalizeOrderStatus, parseOrderLines } from '@/lib/data/orders';
 import {
   generateInvoiceHTML,
   generateReceiptHTML,
@@ -23,6 +23,7 @@ interface SaleLine {
   productId: string;
   productName: string;
   quantity: number;
+  discountPercent?: number;
 }
 
 function mapSaleRowToOrder(row: Record<string, unknown>): Order {
@@ -31,8 +32,13 @@ function mapSaleRowToOrder(row: Record<string, unknown>): Order {
     orderNumber: String(row.sale_number ?? row.orderNumber ?? ''),
     customerId: String(row.customer_id ?? row.customerId ?? ''),
     customerName: String(row.customer_name ?? row.customerName ?? 'Consumidor final'),
+    subtotal: Number(row.subtotal ?? 0),
+    tax: Number(row.tax ?? 0),
+    discountPercent: Number(row.discount_percent ?? row.discountPercent ?? 0),
+    discountAmount: Number(row.discount_amount ?? row.discountAmount ?? 0),
     amount: Number(row.total ?? row.amount ?? 0),
     items: Number(row.items ?? 0),
+    lines: parseOrderLines(row.line_items ?? row.lines),
     status: normalizeOrderStatus(row.status),
     date: row.sale_date ? new Date(String(row.sale_date)) : new Date(),
   };
@@ -48,16 +54,14 @@ export default function Orders() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isLoadingOrders, setIsLoadingOrders] = useState(true);
   const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [isLoadingOrderDetail, setIsLoadingOrderDetail] = useState(false);
 
   const loadOrders = async (source: string) => {
     setIsLoadingOrders(true);
 
     try {
       const rows = await apiRequest<Record<string, unknown>[]>('/sales');
-      console.log(`[Orders] ${source} fetch /sales response`, rows);
-
       const mappedOrders = rows.map(mapSaleRowToOrder);
-      console.log(`[Orders] ${source} mapped orders`, mappedOrders);
 
       dispatch({ type: 'SET_ORDERS', payload: mappedOrders });
       setOrdersError(null);
@@ -79,12 +83,6 @@ export default function Orders() {
       order.customerName.toLowerCase().includes(searchTerm)
   );
 
-  console.log('[Orders] render table payload', {
-    stateOrdersCount: state.orders.length,
-    filteredOrdersCount: filteredOrders.length,
-    filteredOrders,
-  });
-
   const updateOrderStatus = async (orderId: string, status: Order['status']) => {
     const target = state.orders.find((order) => order.id === orderId);
     if (!target) return;
@@ -94,7 +92,6 @@ export default function Orders() {
         method: 'PATCH',
         body: { status },
       });
-      console.log(`[Orders] status ${status} response`, data);
 
       dispatch({
         type: 'UPDATE_ORDER',
@@ -115,9 +112,39 @@ export default function Orders() {
     setSearchTerm(e.target.value.toLowerCase());
   };
 
-  const handleViewOrder = (order: Order) => {
+  const loadOrderDetail = async (orderId: string) => {
+    const row = await apiRequest<Record<string, unknown>>(`/sales/${orderId}`);
+    const detailedOrder = mapSaleRowToOrder(row);
+
+    dispatch({ type: 'UPDATE_ORDER', payload: detailedOrder });
+    return detailedOrder;
+  };
+
+  const ensureOrderDetail = async (order: Order) => {
+    if (order.lines && order.lines.length > 0) {
+      return order;
+    }
+
+    return loadOrderDetail(order.id);
+  };
+
+  const handleViewOrder = async (order: Order) => {
     setSelectedOrder(order);
     setIsModalOpen(true);
+
+    if (order.lines && order.lines.length > 0) {
+      return;
+    }
+
+    try {
+      setIsLoadingOrderDetail(true);
+      const detailedOrder = await ensureOrderDetail(order);
+      setSelectedOrder(detailedOrder);
+    } catch (error) {
+      console.warn('[Orders] No se pudo enriquecer el detalle de la venta', error);
+    } finally {
+      setIsLoadingOrderDetail(false);
+    }
   };
 
   const handleCancelOrder = async (orderId: string) => {
@@ -149,14 +176,22 @@ export default function Orders() {
     invoiceDate: new Date().toLocaleDateString('es-ES'),
   });
 
-  const handleGenerateInvoice = (order: Order) => {
+  const handleGenerateInvoice = async (order: Order) => {
     if (isInventoryReversalStatus(order.status)) {
       toast.error('No se puede facturar una venta revertida');
       return;
     }
 
     try {
-      const invoiceHTML = generateInvoiceHTML(getInvoiceData(order));
+      let detailedOrder = order;
+
+      try {
+        detailedOrder = await ensureOrderDetail(order);
+      } catch (error) {
+        console.warn('[Orders] Factura sin detalle enriquecido', error);
+      }
+
+      const invoiceHTML = generateInvoiceHTML(getInvoiceData(detailedOrder));
       downloadDocument(invoiceHTML, `Comprobante-${order.orderNumber}.html`);
       toast.success(`Comprobante generado para ${order.orderNumber}`);
     } catch {
@@ -164,14 +199,22 @@ export default function Orders() {
     }
   };
 
-  const handlePrintTicket = (order: Order) => {
+  const handlePrintTicket = async (order: Order) => {
     if (isInventoryReversalStatus(order.status)) {
       toast.error('No se puede imprimir ticket de una venta revertida');
       return;
     }
 
     try {
-      const receiptHTML = generateReceiptHTML(getInvoiceData(order));
+      let detailedOrder = order;
+
+      try {
+        detailedOrder = await ensureOrderDetail(order);
+      } catch (error) {
+        console.warn('[Orders] Ticket sin detalle enriquecido', error);
+      }
+
+      const receiptHTML = generateReceiptHTML(getInvoiceData(detailedOrder));
       printDocument(receiptHTML);
       toast.success(`Ticket enviado a impresion: ${order.orderNumber}`);
     } catch {
@@ -186,7 +229,15 @@ export default function Orders() {
     }
 
     try {
-      await generateTicketPDF(getInvoiceData(order), `Ticket-${order.orderNumber}.pdf`);
+      let detailedOrder = order;
+
+      try {
+        detailedOrder = await ensureOrderDetail(order);
+      } catch (error) {
+        console.warn('[Orders] PDF sin detalle enriquecido', error);
+      }
+
+      await generateTicketPDF(getInvoiceData(detailedOrder), `Ticket-${order.orderNumber}.pdf`);
       toast.success(`PDF generado para ${order.orderNumber}`);
     } catch {
       toast.error('No se pudo generar el PDF');
@@ -229,20 +280,43 @@ export default function Orders() {
               productId: Number(line.productId),
               quantity: line.quantity,
               unitPrice: product?.price ?? 0,
+              discountPercent: Number(line.discountPercent ?? 0),
             };
           }),
         },
       });
-      console.log('[Orders] create sale response', data);
 
       const orderWithDefaults: Order = {
         id: String(data.saleId ?? newOrder.id),
         orderNumber: String(data.saleNumber ?? newOrder.orderNumber),
         customerId: newOrder.customerId,
         customerName: newOrder.customerName,
+        subtotal: Number(data.subtotal ?? newOrder.subtotal),
+        tax: Number(data.tax ?? newOrder.tax),
+        discountPercent: Number(data.discountPercent ?? newOrder.discountPercent ?? 0),
+        discountAmount: Number(data.discountAmount ?? newOrder.discountAmount ?? 0),
         amount: Number(data.total ?? newOrder.amount),
         status: normalizeOrderStatus(data.status ?? 'paid'),
         items: newOrder.items,
+        lines: saleLines.map((line) => {
+          const product = state.products.find((item) => item.id === line.productId);
+          const unitPrice = product?.price ?? 0;
+          const quantity = line.quantity;
+          const baseTotal = unitPrice * quantity;
+          const discountPercent = Number(line.discountPercent ?? 0);
+          const discountAmount = Number((baseTotal * (discountPercent / 100)).toFixed(2));
+
+          return {
+            productId: line.productId,
+            productName: line.productName,
+            quantity,
+            unitPrice,
+            baseTotal,
+            discountPercent,
+            discountAmount,
+            lineTotal: Number((baseTotal - discountAmount).toFixed(2)),
+          };
+        }),
         date: new Date(newOrder.date),
       };
 
