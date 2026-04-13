@@ -11,6 +11,18 @@ import type { Order } from '@/lib/data/orders';
 import type { Purchase } from '@/lib/data/purchases';
 import type { CashSession, CashMovement } from '@/lib/data/cash-register';
 
+function normalizeOrderStatus(status: unknown): Order['status'] {
+  const value = String(status ?? '').toLowerCase();
+
+  if (value === 'paid' || value === 'completed') return 'delivered';
+  if (value === 'cancelled') return 'cancelled';
+  if (value === 'processing' || value === 'shipped' || value === 'delivered' || value === 'pending') {
+    return value as Order['status'];
+  }
+
+  return 'pending';
+}
+
 function mapProduct(row: Record<string, unknown>): Product {
   return {
     id: String(row.id),
@@ -121,7 +133,7 @@ function mapOrder(row: Record<string, unknown>): Order {
     customerId: String(row.customer_id ?? ''),
     customerName: String(row.customer_name ?? 'Consumidor final'),
     amount: Number(row.total ?? 0),
-    status: (row.status as Order['status']) ?? 'pending',
+    status: normalizeOrderStatus(row.status),
     items: Number(row.items ?? 0),
     date: row.sale_date ? new Date(String(row.sale_date)) : new Date(),
   };
@@ -154,6 +166,7 @@ export default function AdminDataBootstrap() {
   const { isAuthenticated } = useAuth();
   const { dispatch } = useAdmin();
   const loadedRef = useRef(false);
+  const loadingRef = useRef(false);
 
   const safeRequest = async (path: string): Promise<Record<string, unknown>[]> => {
     try {
@@ -167,23 +180,16 @@ export default function AdminDataBootstrap() {
   useEffect(() => {
     if (!isAuthenticated) {
       loadedRef.current = false;
+      loadingRef.current = false;
       return;
     }
 
-    if (loadedRef.current) return;
-    loadedRef.current = true;
+    if (loadedRef.current || loadingRef.current) return;
+    loadingRef.current = true;
 
     let cancelled = false;
-    let idleHandle: number | null = null;
-    const runtime = globalThis as {
-      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
-      cancelIdleCallback?: (handle: number) => void;
-      setTimeout: typeof setTimeout;
-      clearTimeout: typeof clearTimeout;
-    };
 
     const loadCriticalData = async () => {
-      // Performance: carga prioritaria para pintar dashboard y vistas esenciales.
       const [products, customers, inventory, orders, sessions, movements] = await Promise.all([
         safeRequest('/products'),
         safeRequest('/customers'),
@@ -221,10 +227,18 @@ export default function AdminDataBootstrap() {
       dispatch({ type: 'SET_INVENTORY', payload: inventory.map(mapInventory) });
       dispatch({ type: 'SET_ORDERS', payload: orders.map(mapOrder) });
       dispatch({ type: 'SET_CASH_SESSIONS', payload: cashSessions });
+
+      console.log('[AdminDataBootstrap] critical modules loaded', {
+        products: products.length,
+        customers: customers.length,
+        inventory: inventory.length,
+        orders: orders.length,
+        cashSessions: sessions.length,
+        cashMovements: movements.length,
+      });
     };
 
     const loadDeferredData = async () => {
-      // Performance: datos secundarios diferidos para reducir peticiones iniciales.
       const [categories, suppliers, kardex, purchases] = await Promise.all([
         safeRequest('/categories'),
         safeRequest('/suppliers'),
@@ -238,35 +252,39 @@ export default function AdminDataBootstrap() {
       dispatch({ type: 'SET_SUPPLIERS', payload: suppliers.map(mapSupplier) });
       dispatch({ type: 'SET_KARDEX', payload: kardex.map(mapKardex) });
       dispatch({ type: 'SET_PURCHASES', payload: purchases.map(mapPurchase) });
+
+      console.log('[AdminDataBootstrap] secondary modules loaded', {
+        categories: categories.length,
+        suppliers: suppliers.length,
+        kardex: kardex.length,
+        purchases: purchases.length,
+      });
     };
 
     loadCriticalData()
       .then(() => {
-        const runDeferred = () => {
-          void loadDeferredData();
-        };
-
-        if (typeof runtime.requestIdleCallback === 'function') {
-          idleHandle = runtime.requestIdleCallback(runDeferred, { timeout: 1200 });
+        if (cancelled) {
+          loadingRef.current = false;
           return;
         }
 
-        idleHandle = runtime.setTimeout(runDeferred, 300) as unknown as number;
+        return loadDeferredData().then(() => {
+          if (!cancelled) {
+            loadedRef.current = true;
+          }
+          loadingRef.current = false;
+        });
       })
       .catch(() => {
         loadedRef.current = false;
+        loadingRef.current = false;
       });
 
     return () => {
       cancelled = true;
-      if (idleHandle == null) return;
-
-      if (typeof runtime.cancelIdleCallback === 'function') {
-        runtime.cancelIdleCallback(idleHandle);
-        return;
+      if (!loadedRef.current) {
+        loadingRef.current = false;
       }
-
-      runtime.clearTimeout(idleHandle);
     };
   }, [dispatch, isAuthenticated]);
 

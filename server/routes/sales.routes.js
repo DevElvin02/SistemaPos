@@ -27,6 +27,10 @@ router.get('/', async (req, res, next) => {
        ORDER BY s.id DESC
        LIMIT 200`
     );
+    console.log('[sales.routes] GET /api/sales response', {
+      count: rows.length,
+      firstRow: rows[0] ?? null,
+    });
     res.json({ ok: true, data: rows });
   } catch (error) {
     if (isSchemaMissing(error)) {

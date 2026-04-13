@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 import DataTable from '@/components/admin/DataTable';
 import StatusBadge from '@/components/admin/StatusBadge';
@@ -25,6 +25,37 @@ interface SaleLine {
   quantity: number;
 }
 
+function normalizeOrderStatus(status: unknown): Order['status'] {
+  const value = String(status ?? '').toLowerCase();
+
+  if (value === 'paid' || value === 'completed') {
+    return 'delivered';
+  }
+
+  if (value === 'cancelled') {
+    return 'cancelled';
+  }
+
+  if (value === 'processing' || value === 'shipped' || value === 'delivered' || value === 'pending') {
+    return value as Order['status'];
+  }
+
+  return 'pending';
+}
+
+function mapSaleRowToOrder(row: Record<string, unknown>): Order {
+  return {
+    id: String(row.id ?? ''),
+    orderNumber: String(row.sale_number ?? row.orderNumber ?? ''),
+    customerId: String(row.customer_id ?? row.customerId ?? ''),
+    customerName: String(row.customer_name ?? row.customerName ?? 'Consumidor final'),
+    amount: Number(row.total ?? row.amount ?? 0),
+    items: Number(row.items ?? 0),
+    status: normalizeOrderStatus(row.status),
+    date: row.sale_date ? new Date(String(row.sale_date)) : new Date(),
+  };
+}
+
 export default function Orders() {
   const { state, dispatch } = useAdmin();
   const { user } = useAuth();
@@ -33,12 +64,44 @@ export default function Orders() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(true);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+
+  const loadOrders = async (source: string) => {
+    setIsLoadingOrders(true);
+
+    try {
+      const rows = await apiRequest<Record<string, unknown>[]>('/sales');
+      console.log(`[Orders] ${source} fetch /sales response`, rows);
+
+      const mappedOrders = rows.map(mapSaleRowToOrder);
+      console.log(`[Orders] ${source} mapped orders`, mappedOrders);
+
+      dispatch({ type: 'SET_ORDERS', payload: mappedOrders });
+      setOrdersError(null);
+    } catch (error) {
+      console.error(`[Orders] ${source} fetch /sales failed`, error);
+      setOrdersError(error instanceof Error ? error.message : 'No se pudieron cargar las ventas');
+    } finally {
+      setIsLoadingOrders(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadOrders('initial-load');
+  }, []);
 
   const filteredOrders = state.orders.filter(
     (order) =>
       order.orderNumber.toLowerCase().includes(searchTerm) ||
       order.customerName.toLowerCase().includes(searchTerm)
   );
+
+  console.log('[Orders] render table payload', {
+    stateOrdersCount: state.orders.length,
+    filteredOrdersCount: filteredOrders.length,
+    filteredOrders,
+  });
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value.toLowerCase());
@@ -57,11 +120,12 @@ export default function Orders() {
         method: 'PATCH',
         body: { status: 'cancelled' },
       });
+      console.log('[Orders] cancel sale response', data);
       dispatch({
         type: 'UPDATE_ORDER',
         payload: {
           ...target,
-          status: (data.status as Order['status']) ?? 'cancelled',
+          ...mapSaleRowToOrder(data),
         },
       });
       toast.success(`Venta ${target.orderNumber} cancelada`);
@@ -171,6 +235,7 @@ export default function Orders() {
           }),
         },
       });
+      console.log('[Orders] create sale response', data);
 
       const orderWithDefaults: Order = {
         id: String(data.saleId ?? newOrder.id),
@@ -178,12 +243,10 @@ export default function Orders() {
         customerId: newOrder.customerId,
         customerName: newOrder.customerName,
         amount: Number(data.total ?? newOrder.amount),
-        status: (data.status as Order['status']) ?? 'paid',
+        status: normalizeOrderStatus(data.status ?? 'paid'),
         items: newOrder.items,
         date: new Date(newOrder.date),
       };
-
-      dispatch({ type: 'ADD_ORDER', payload: orderWithDefaults });
 
       for (const line of saleLines) {
         dispatch({
@@ -197,6 +260,8 @@ export default function Orders() {
           },
         });
       }
+
+      await loadOrders('after-create');
       return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo registrar la venta');
@@ -275,7 +340,12 @@ export default function Orders() {
         </div>
       </div>
 
-      <DataTable columns={columns} data={filteredOrders} />
+      <DataTable
+        columns={columns}
+        data={filteredOrders}
+        loading={isLoadingOrders}
+        emptyMessage={ordersError ?? 'No hay ventas registradas'}
+      />
 
       <OrderDetailModal
         order={selectedOrder}

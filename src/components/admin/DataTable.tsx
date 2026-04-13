@@ -12,12 +12,16 @@ interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
   className?: string;
+  loading?: boolean;
+  emptyMessage?: string;
 }
 
 export default function DataTable<T>({
   columns,
   data,
   className = '',
+  loading = false,
+  emptyMessage = 'No data available',
 }: DataTableProps<T>) {
   const [sortConfig, setSortConfig] = useState<{
     column: number;
@@ -46,9 +50,13 @@ export default function DataTable<T>({
   return (
     <div className={`bg-card rounded-2xl border border-border/70 overflow-hidden shadow-[0_18px_45px_-30px_rgba(30,41,59,0.45)] ${className}`}>
       <div className="md:hidden">
-        {data.length === 0 ? (
+        {loading ? (
           <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-            No data available
+            Cargando registros...
+          </div>
+        ) : data.length === 0 ? (
+          <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+            {emptyMessage}
           </div>
         ) : (
           <div className="divide-y divide-border/70">
@@ -99,13 +107,22 @@ export default function DataTable<T>({
             </tr>
           </thead>
           <tbody>
-            {data.length === 0 ? (
+            {loading ? (
               <tr>
                 <td
                   colSpan={columns.length}
                   className="px-4 py-10 text-center text-muted-foreground lg:px-6"
                 >
-                  No data available
+                  Cargando registros...
+                </td>
+              </tr>
+            ) : data.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={columns.length}
+                  className="px-4 py-10 text-center text-muted-foreground lg:px-6"
+                >
+                  {emptyMessage}
                 </td>
               </tr>
             ) : (
