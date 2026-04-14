@@ -120,6 +120,7 @@ function mapOrder(row: Record<string, unknown>): Order {
     orderNumber: String(row.sale_number ?? ''),
     customerId: String(row.customer_id ?? ''),
     customerName: String(row.customer_name ?? 'Consumidor final'),
+    cashierName: String(row.cashier_name ?? row.cashierName ?? ''),
     subtotal: Number(row.subtotal ?? 0),
     tax: Number(row.tax ?? 0),
     discountPercent: Number(row.discount_percent ?? row.discountPercent ?? 0),

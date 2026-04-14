@@ -3,6 +3,9 @@ import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { useAdmin } from '@/context/AdminContext'
 import { useCompanySettings } from '@/hooks/use-company-settings'
+import { generateInvoiceHTML, generateReceiptHTML, printDocument } from '@/lib/utils/invoice-generator'
+import type { Order } from '@/lib/data/orders'
+import { useAuth } from '@/context/AuthContext'
 
 interface CreateOrderModalProps {
   isOpen: boolean
@@ -19,6 +22,7 @@ const roundMoney = (value: number) => Number(value.toFixed(2))
 export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrderModalProps) {
   const { state } = useAdmin()
   const { companySettings } = useCompanySettings()
+  const { user } = useAuth()
   const barcodeInputRef = useRef<HTMLInputElement | null>(null)
   const scannerBufferRef = useRef('')
   const scannerResetTimerRef = useRef<number | null>(null)
@@ -278,77 +282,26 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
 
   const formatCurrency = (value: number) => `$${value.toFixed(2)}`
 
-  const generateTicket = (order: any) => {
-    const popup = window.open('', '_blank', 'width=420,height=640')
-    if (!popup) return
+  const printSaleDocument = (order: Order & { documentType: DocumentType }) => {
+    const customer = state.customers.find((item) => item.id === order.customerId)
+    const invoiceData = {
+      order,
+      customerName: order.customerName,
+      customerEmail: customer?.email || 'cliente@motorepuestos.com',
+      cashierName: order.cashierName || user?.name || 'Cajero no disponible',
+      companyName: companySettings.companyName,
+      companyAddress: companySettings.address,
+      companyEmail: companySettings.email,
+      companyPhone: companySettings.phone,
+      companyCountry: companySettings.country,
+      invoiceDate: new Date().toLocaleDateString('es-ES'),
+    }
 
-    const rows = order.lines
-      .map(
-        (line: any) => `
-          <tr>
-            <td>${line.productName}</td>
-            <td style="text-align:center">${line.quantity}</td>
-            <td style="text-align:right">${formatCurrency(line.unitPrice)}</td>
-            <td style="text-align:right">${line.discountPercent.toFixed(2)}%</td>
-            <td style="text-align:right">${formatCurrency(line.subtotal)}</td>
-          </tr>
-        `
-      )
-      .join('')
+    const html = order.documentType === 'invoice'
+      ? generateInvoiceHTML(invoiceData)
+      : generateReceiptHTML(invoiceData)
 
-    popup.document.write(`
-      <html>
-        <head>
-          <title>${order.documentType === 'invoice' ? 'Factura' : 'Ticket'} ${order.orderNumber}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 16px; color: #111; }
-            h2, p { margin: 0 0 8px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th, td { border-bottom: 1px solid #ddd; padding: 6px 0; font-size: 12px; }
-            .total { margin-top: 12px; font-weight: bold; text-align: right; }
-          </style>
-        </head>
-        <body>
-          <h2>${companySettings.companyName} - ${order.documentType === 'invoice' ? 'Factura' : 'Ticket'}</h2>
-          <p><strong>Direccion:</strong> ${companySettings.address}</p>
-          <p><strong>Pais:</strong> ${companySettings.country}</p>
-          <p><strong>Telefono:</strong> ${companySettings.phone}</p>
-          <p><strong>Email:</strong> ${companySettings.email}</p>
-          <p><strong>Orden:</strong> ${order.orderNumber}</p>
-          <p><strong>Cliente:</strong> ${order.customerName}</p>
-          <p><strong>Pago:</strong> ${order.payment.method === 'cash' ? 'Efectivo' : 'Transferencia'}</p>
-          <p><strong>Fecha:</strong> ${new Date(order.date).toLocaleString('es-ES')}</p>
-
-          <table>
-            <thead>
-              <tr>
-                <th style="text-align:left">Producto</th>
-                <th style="text-align:center">Cant.</th>
-                <th style="text-align:right">P/U</th>
-                <th style="text-align:right">Desc.</th>
-                <th style="text-align:right">Importe</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-
-          <p class="total">Subtotal: ${formatCurrency(order.grossSubtotal ?? order.subtotal + (order.discountAmount || 0))}</p>
-          ${order.discountAmount > 0 ? `<p class="total">Descuento total: -${formatCurrency(order.discountAmount)}</p>` : ''}
-          <p class="total">Subtotal con descuento: ${formatCurrency(order.subtotal)}</p>
-          <p class="total">IVA (0%): ${formatCurrency(order.tax)}</p>
-          <p class="total">Total: ${formatCurrency(order.amount)}</p>
-          ${
-            order.payment.method === 'cash'
-              ? `<p class="total">Recibido: ${formatCurrency(order.payment.received)}</p><p class="total">Cambio: ${formatCurrency(order.payment.change)}</p>`
-              : ''
-          }
-        </body>
-      </html>
-    `)
-
-    popup.document.close()
-    popup.focus()
-    popup.print()
+    printDocument(html)
   }
 
   useEffect(() => {
@@ -426,7 +379,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
       }
 
       if (roundMoney(received - total) < 0) {
-        toast.error('El monto recibido no cubre el total de la venta')
+        toast.error('El monto recibido no cubre el total a pagar con descuento')
         return
       }
     }
@@ -440,11 +393,21 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
       discountAmount,
       amount: total,
       items: totalItems,
-      status: 'delivered',
+      status: 'delivered' as const,
       orderNumber: `ORD-${Date.now()}`,
       customerName: state.customers.find(c => c.id === customerId)?.name || '',
-      date: new Date().toISOString(),
-      lines: lineItems,
+      cashierName: user?.name || 'Cajero no disponible',
+      date: new Date(),
+      lines: lineItems.map((line) => ({
+        productId: line.productId,
+        productName: line.productName,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        baseTotal: line.baseTotal,
+        discountPercent: line.discountPercent,
+        discountAmount: line.discountAmount,
+        lineTotal: line.subtotal,
+      })),
       documentType,
       payment: {
         method: paymentMethod,
@@ -460,7 +423,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
 
     toast.success('Venta creada exitosamente')
     if (printTicket) {
-      generateTicket(newOrder)
+      printSaleDocument(newOrder)
     }
     resetForm()
     onClose()
@@ -745,11 +708,11 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
 
                 <div className="rounded-xl border border-border bg-card p-3 text-sm space-y-1">
                   <p className="text-muted-foreground">Total de artículos: <span className="font-medium text-secondary">{totalItems}</span></p>
-                  <p className="text-muted-foreground">Subtotal bruto: <span className="font-medium text-secondary">{formatCurrency(grossSubtotal)}</span></p>
+                  <p className="text-muted-foreground">Precio original: <span className="font-medium text-secondary">{formatCurrency(grossSubtotal)}</span></p>
                   <p className="text-muted-foreground">Descuento total: <span className="font-medium text-secondary">-{formatCurrency(discountAmount)}</span></p>
-                  <p className="text-muted-foreground">Subtotal con descuento: <span className="font-medium text-secondary">{formatCurrency(discountedSubtotal)}</span></p>
+                  <p className="text-muted-foreground">Total con descuento: <span className="font-medium text-secondary">{formatCurrency(discountedSubtotal)}</span></p>
                   <p className="text-muted-foreground">IVA (0%): <span className="font-medium text-secondary">{formatCurrency(ivaAmount)}</span></p>
-                  <p className="text-xl font-bold text-secondary pt-1">Total: {formatCurrency(total)}</p>
+                  <p className="text-xl font-bold text-secondary pt-1">Total a pagar: {formatCurrency(total)}</p>
                 </div>
 
                 <label className="flex items-center gap-2 text-sm text-muted-foreground">

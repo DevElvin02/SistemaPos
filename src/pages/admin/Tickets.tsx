@@ -38,6 +38,7 @@ export default function Tickets() {
     order,
     customerName: order.customerName,
     customerEmail: getCustomerEmail(order),
+    cashierName: order.cashierName || 'Cajero no disponible',
     companyName: companySettings.companyName,
     companyAddress: companySettings.address,
     companyEmail: companySettings.email,

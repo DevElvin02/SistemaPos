@@ -90,14 +90,15 @@ async function nextSaleNumber(connection) {
 
 async function getSaleById(connection, id) {
   const [sales] = await connection.query(
-    `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name,
+    `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name, u.name AS cashier_name,
             s.sale_date, s.document_type, s.subtotal, s.discount_percent, s.discount_amount, s.tax, s.total, s.status,
             COALESCE(SUM(si.quantity), 0) AS items
      FROM sales s
      LEFT JOIN customers c ON c.id = s.customer_id
+     LEFT JOIN users u ON u.id = s.user_id
      LEFT JOIN sale_items si ON si.sale_id = s.id
      WHERE s.id = ?
-     GROUP BY s.id, s.sale_number, s.customer_id, c.name, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
+     GROUP BY s.id, s.sale_number, s.customer_id, c.name, u.name, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
      LIMIT 1`,
     [id]
   );
@@ -171,13 +172,14 @@ async function attachSaleItems(connection, sales) {
 
 async function listSales(connection, limit = 200) {
   const [sales] = await connection.query(
-    `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name,
+    `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name, u.name AS cashier_name,
             s.sale_date, s.document_type, s.subtotal, s.discount_percent, s.discount_amount, s.tax, s.total, s.status,
             COALESCE(SUM(si.quantity), 0) AS items
      FROM sales s
      LEFT JOIN customers c ON c.id = s.customer_id
+     LEFT JOIN users u ON u.id = s.user_id
      LEFT JOIN sale_items si ON si.sale_id = s.id
-     GROUP BY s.id, s.sale_number, s.customer_id, c.name, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
+     GROUP BY s.id, s.sale_number, s.customer_id, c.name, u.name, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
      ORDER BY s.id DESC
      LIMIT ?`,
     [limit]
@@ -240,7 +242,7 @@ router.post('/', async (req, res, next) => {
   }
 
   const connection = await dbPool.getConnection();
-  const effectiveUserId = null;
+  const effectiveUserId = userId ? Number(userId) : null;
 
   try {
     await connection.beginTransaction();
@@ -349,6 +351,8 @@ router.post('/', async (req, res, next) => {
       );
     }
 
+    const createdSale = await getSaleById(connection, saleId);
+
     await connection.commit();
 
     res.status(201).json({
@@ -356,6 +360,7 @@ router.post('/', async (req, res, next) => {
       data: {
         saleId,
         saleNumber,
+        cashierName: createdSale?.cashier_name ?? '',
         subtotal,
         discountPercent: 0,
         discountAmount,

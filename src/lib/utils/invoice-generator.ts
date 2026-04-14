@@ -4,6 +4,7 @@ export interface InvoiceData {
   order: Order
   customerName: string
   customerEmail: string
+  cashierName?: string
   companyName: string
   companyAddress: string
   companyEmail?: string
@@ -52,7 +53,7 @@ function getOrderTotals(order: Order) {
 }
 
 export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
-  const { order, customerName, customerEmail, companyName, companyAddress, companyEmail, companyPhone, companyCountry } = invoiceData
+  const { order, customerName, customerEmail, cashierName, companyName, companyAddress, companyEmail, companyPhone, companyCountry } = invoiceData
   const { lines, grossSubtotal, subtotal, discountAmount, taxAmount, totalAmount, totalItems, hasTax, hasDiscount } = getOrderTotals(order)
   const lineRows = lines.length > 0
     ? lines.map((line) => `
@@ -280,6 +281,7 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
             <h3>Condiciones de Pago</h3>
             <p><strong>Estado:</strong> ${order.status}</p>
             <p><strong>Items:</strong> ${totalItems}</p>
+            <p><strong>Cajero:</strong> ${escapeHtml(cashierName || order.cashierName || 'Cajero no disponible')}</p>
           </div>
         </div>
 
@@ -343,7 +345,7 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
 }
 
 export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
-  const { order, customerName, companyName, companyAddress, companyEmail, companyPhone, companyCountry } = invoiceData
+  const { order, customerName, cashierName, companyName, companyAddress, companyEmail, companyPhone, companyCountry } = invoiceData
   const { lines, grossSubtotal, subtotal, discountAmount, taxAmount, totalAmount, totalItems, hasTax, hasDiscount } = getOrderTotals(order)
   const itemRows = lines.length > 0
     ? lines.map((line) => `
@@ -528,6 +530,7 @@ export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
 
         <div class="customer-info">
           <p><strong>Cliente:</strong> ${customerName}</p>
+          <p><strong>Cajero:</strong> ${escapeHtml(cashierName || order.cashierName || 'Cajero no disponible')}</p>
           <p><strong>Estado:</strong> ${order.status}</p>
           <p><strong>Items:</strong> ${totalItems}</p>
         </div>
@@ -600,46 +603,138 @@ export const downloadDocument = (html: string, filename: string) => {
 }
 
 export const printDocument = (html: string) => {
-  const iframe = document.createElement('iframe')
-  iframe.style.position = 'fixed'
-  iframe.style.right = '0'
-  iframe.style.bottom = '0'
-  iframe.style.width = '0'
-  iframe.style.height = '0'
-  iframe.style.border = '0'
-  iframe.setAttribute('aria-hidden', 'true')
-
-  const cleanup = () => {
-    setTimeout(() => {
-      if (iframe.parentNode) {
-        iframe.parentNode.removeChild(iframe)
-      }
-    }, 500)
+  const popup = window.open('', '_blank', 'width=1100,height=760')
+  if (!popup) {
+    throw new Error('No se pudo abrir la vista previa de impresion')
   }
 
-  iframe.onload = () => {
-    const frameWindow = iframe.contentWindow
-    if (!frameWindow) {
-      cleanup()
-      throw new Error('No se pudo iniciar la impresion')
-    }
+  const file = new Blob([html], { type: 'text/html' })
+  const previewUrl = URL.createObjectURL(file)
+  const titleMatch = html.match(/<title>(.*?)<\/title>/i)
+  const previewTitle = titleMatch?.[1] || 'Vista previa de impresion'
 
-    // Give the browser/electron print engine a moment to layout the document.
-    setTimeout(() => {
-      frameWindow.focus()
-      frameWindow.print()
-      cleanup()
-    }, 250)
-  }
+  popup.document.write(`
+    <!DOCTYPE html>
+    <html lang="es">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>${previewTitle}</title>
+        <style>
+          :root {
+            color-scheme: light;
+          }
+          * {
+            box-sizing: border-box;
+          }
+          body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            color: #111;
+          }
+          .preview-toolbar {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            background: #ffffff;
+          }
+          .preview-title {
+            font-size: 16px;
+            font-weight: 700;
+          }
+          .preview-actions {
+            display: flex;
+            gap: 10px;
+          }
+          .preview-button {
+            border: 0;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+          }
+          .preview-button.primary {
+            background: #f97316;
+            color: #fff;
+          }
+          .preview-button.secondary {
+            background: #e5e7eb;
+            color: #111;
+          }
+          .preview-frame {
+            display: block;
+            width: 100%;
+            height: calc(100vh - 65px);
+            border: 0;
+            background: #fff;
+          }
+          @media print {
+            .preview-toolbar {
+              display: none;
+            }
+            .preview-frame {
+              height: auto;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="preview-toolbar">
+          <div class="preview-title">${previewTitle}</div>
+          <div class="preview-actions">
+            <button class="preview-button secondary" type="button" id="open-document">Abrir documento</button>
+            <button class="preview-button primary" type="button" id="print-document">Imprimir</button>
+            <button class="preview-button secondary" type="button" id="close-preview">Cerrar</button>
+          </div>
+        </div>
+        <iframe class="preview-frame" id="preview-frame" src="${previewUrl}"></iframe>
+        <script>
+          const previewUrl = ${JSON.stringify(previewUrl)};
+          const frame = document.getElementById('preview-frame');
+          const printButton = document.getElementById('print-document');
+          const openButton = document.getElementById('open-document');
+          const closeButton = document.getElementById('close-preview');
 
-  document.body.appendChild(iframe)
-  iframe.srcdoc = html
+          printButton.addEventListener('click', () => {
+            if (frame && frame.contentWindow) {
+              frame.contentWindow.focus();
+              frame.contentWindow.print();
+            }
+          });
+
+          openButton.addEventListener('click', () => {
+            window.open(previewUrl, '_blank');
+          });
+
+          closeButton.addEventListener('click', () => {
+            window.close();
+          });
+
+          window.addEventListener('beforeunload', () => {
+            window.opener = null;
+          });
+        </script>
+      </body>
+    </html>
+  `)
+  popup.document.close()
+  popup.addEventListener('beforeunload', () => {
+    URL.revokeObjectURL(previewUrl)
+  })
 }
 
 export const generateTicketPDF = async (invoiceData: InvoiceData, filename: string) => {
   // Performance: carga jspdf bajo demanda para no penalizar la carga inicial de la ruta de ventas.
   const { jsPDF } = await import('jspdf')
-  const { order, customerName, companyName, companyAddress, companyPhone, companyEmail, companyCountry } = invoiceData
+  const { order, customerName, cashierName, companyName, companyAddress, companyPhone, companyEmail, companyCountry } = invoiceData
   const { lines, grossSubtotal, subtotal, discountAmount, taxAmount, totalAmount, totalItems, hasTax, hasDiscount } = getOrderTotals(order)
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -704,6 +799,8 @@ export const generateTicketPDF = async (invoiceData: InvoiceData, filename: stri
   doc.text(`Fecha: ${new Date(order.date).toLocaleString('es-ES')}`, rightX, y, { align: 'right' })
   y += 5
   doc.text(`Cliente: ${customerName}`, rightX, y, { align: 'right' })
+  y += 5
+  doc.text(`Cajero: ${cashierName || order.cashierName || 'Cajero no disponible'}`, rightX, y, { align: 'right' })
   y += 5
   doc.text(`Items: ${totalItems}`, rightX, y, { align: 'right' })
 

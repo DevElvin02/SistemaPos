@@ -1,6 +1,7 @@
 import net from 'node:net'
 import { spawn } from 'node:child_process'
 
+const API_PORT = 4000
 const RENDERER_PORT = 5173
 const IS_WINDOWS = process.platform === 'win32'
 
@@ -61,12 +62,25 @@ function wireChildExit(child, onExit) {
 
 const npmCommand = IS_WINDOWS ? 'npm.cmd' : 'npm'
 
+const apiRunning = await isPortOpen(API_PORT)
 const rendererRunning = await isPortOpen(RENDERER_PORT)
+
+let api = null
+
+if (apiRunning) {
+  console.log(`[dev:desktop] Reutilizando API existente en http://localhost:${API_PORT}`)
+} else {
+  console.log('[dev:desktop] Iniciando API local en http://localhost:4000')
+  api = runNpmScript('dev:api')
+}
 
 if (rendererRunning) {
   console.log(`[dev:desktop] Reutilizando renderer existente en http://localhost:${RENDERER_PORT}`)
   const electron = runNpmScript('dev:electron')
   electron.on('exit', (code) => {
+    if (api && !api.killed) {
+      api.kill()
+    }
     process.exit(code ?? 0)
   })
 } else {
@@ -86,6 +100,10 @@ if (rendererRunning) {
 
     if (!electron.killed) {
       electron.kill()
+    }
+
+    if (api && !api.killed) {
+      api.kill()
     }
 
     process.exit(exitCode)
