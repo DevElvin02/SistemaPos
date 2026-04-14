@@ -5,6 +5,7 @@ import StatusBadge from '@/components/admin/StatusBadge';
 import { GenericActionButtons } from '@/components/admin/GenericActionButtons';
 import { DeleteConfirmModal } from '@/components/admin/EntityModals';
 import { Supplier } from '@/lib/data/suppliers';
+import { isTextOnlyName, isValidPhone, normalizeNameText, normalizePhone, sanitizeNameText, sanitizePhone } from '@/lib/validators';
 import { toast } from 'sonner';
 import { useAdmin } from '@/context/AdminContext';
 import { useAuth } from '@/context/AuthContext';
@@ -145,6 +146,10 @@ export default function Suppliers() {
   };
 
   const handleSaveSupplier = async () => {
+    const normalizedName = normalizeNameText(formData.name);
+    const normalizedPhoneCandidate = normalizePhone(formData.contact);
+    const supplierPhone = isValidPhone(normalizedPhoneCandidate) ? normalizedPhoneCandidate : null;
+
     if ((formMode === 'create' && !canCreate) || (formMode === 'edit' && !canEdit)) {
       toast.error('No tienes permisos para guardar proveedores');
       return;
@@ -155,13 +160,19 @@ export default function Suppliers() {
       return;
     }
 
+    if (!isTextOnlyName(normalizedName)) {
+      toast.error('El nombre solo puede contener letras y espacios');
+      return;
+    }
+
     try {
       if (formMode === 'create') {
         const data = await apiRequest<Record<string, unknown>>('/suppliers', {
           method: 'POST',
           body: {
-            name: formData.name.trim(),
+            name: normalizedName,
             contact: formData.contact.trim(),
+            phone: supplierPhone,
             productsSold: formData.productsSold,
             status: formData.status,
           },
@@ -173,12 +184,12 @@ export default function Suppliers() {
         const data = await apiRequest<Record<string, unknown>>(`/suppliers/${selectedSupplier.id}`, {
           method: 'PUT',
           body: {
-            name: formData.name.trim(),
+            name: normalizedName,
             contact: formData.contact.trim(),
             productsSold: formData.productsSold,
             status: formData.status,
             email: selectedSupplier.email || null,
-            phone: formData.contact.trim(),
+            phone: supplierPhone,
             website: selectedSupplier.website || null,
             address: selectedSupplier.address,
             city: selectedSupplier.city,
@@ -314,7 +325,7 @@ export default function Suppliers() {
                   <input
                     type="text"
                     value={formData.name}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, name: sanitizeNameText(e.target.value) }))}
                     className="w-full px-3 py-2 border border-border rounded-lg"
                     placeholder="Ej: Distribuidora Central"
                   />
@@ -324,7 +335,7 @@ export default function Suppliers() {
                   <input
                     type="text"
                     value={formData.contact}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, contact: e.target.value }))}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, contact: /\d/.test(e.target.value) ? sanitizePhone(e.target.value) : e.target.value }))}
                     className="w-full px-3 py-2 border border-border rounded-lg"
                     placeholder="Nombre + telefono o correo"
                   />

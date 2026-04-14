@@ -91,14 +91,16 @@ async function nextSaleNumber(connection) {
 async function getSaleById(connection, id) {
   const [sales] = await connection.query(
     `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name, u.name AS cashier_name,
+            sp.method AS payment_method, sp.amount_received, sp.amount_change,
             s.sale_date, s.document_type, s.subtotal, s.discount_percent, s.discount_amount, s.tax, s.total, s.status,
             COALESCE(SUM(si.quantity), 0) AS items
      FROM sales s
      LEFT JOIN customers c ON c.id = s.customer_id
      LEFT JOIN users u ON u.id = s.user_id
+     LEFT JOIN sale_payments sp ON sp.sale_id = s.id
      LEFT JOIN sale_items si ON si.sale_id = s.id
      WHERE s.id = ?
-     GROUP BY s.id, s.sale_number, s.customer_id, c.name, u.name, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
+     GROUP BY s.id, s.sale_number, s.customer_id, c.name, u.name, sp.method, sp.amount_received, sp.amount_change, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
      LIMIT 1`,
     [id]
   );
@@ -173,13 +175,15 @@ async function attachSaleItems(connection, sales) {
 async function listSales(connection, limit = 200) {
   const [sales] = await connection.query(
     `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name, u.name AS cashier_name,
+            sp.method AS payment_method, sp.amount_received, sp.amount_change,
             s.sale_date, s.document_type, s.subtotal, s.discount_percent, s.discount_amount, s.tax, s.total, s.status,
             COALESCE(SUM(si.quantity), 0) AS items
      FROM sales s
      LEFT JOIN customers c ON c.id = s.customer_id
      LEFT JOIN users u ON u.id = s.user_id
+     LEFT JOIN sale_payments sp ON sp.sale_id = s.id
      LEFT JOIN sale_items si ON si.sale_id = s.id
-     GROUP BY s.id, s.sale_number, s.customer_id, c.name, u.name, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
+     GROUP BY s.id, s.sale_number, s.customer_id, c.name, u.name, sp.method, sp.amount_received, sp.amount_change, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
      ORDER BY s.id DESC
      LIMIT ?`,
     [limit]
@@ -361,6 +365,9 @@ router.post('/', async (req, res, next) => {
         saleId,
         saleNumber,
         cashierName: createdSale?.cashier_name ?? '',
+        paymentMethod: createdSale?.payment_method ?? paymentMethod,
+        amountReceived: Number(createdSale?.amount_received ?? (paymentMethod === 'cash' ? receivedAmount : total)),
+        amountChange: Number(createdSale?.amount_change ?? (paymentMethod === 'cash' ? Number((receivedAmount - total).toFixed(2)) : 0)),
         subtotal,
         discountPercent: 0,
         discountAmount,

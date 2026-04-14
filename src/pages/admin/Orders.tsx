@@ -36,6 +36,11 @@ function mapSaleRowToOrder(row: Record<string, unknown>): Order {
     customerId: String(row.customer_id ?? row.customerId ?? ''),
     customerName: String(row.customer_name ?? row.customerName ?? 'Consumidor final'),
     cashierName: String(row.cashier_name ?? row.cashierName ?? ''),
+    payment: {
+      method: String(row.payment_method ?? row.paymentMethod ?? 'cash'),
+      received: Number(row.amount_received ?? row.amountReceived ?? row.total ?? row.amount ?? 0),
+      change: Number(row.amount_change ?? row.amountChange ?? 0),
+    },
     subtotal: Number(row.subtotal ?? 0),
     tax: Number(row.tax ?? 0),
     discountPercent: Number(row.discount_percent ?? row.discountPercent ?? 0),
@@ -296,6 +301,11 @@ export default function Orders() {
         customerId: newOrder.customerId,
         customerName: newOrder.customerName,
         cashierName: String(data.cashierName ?? newOrder.cashierName ?? user?.name ?? ''),
+        payment: {
+          method: String(data.paymentMethod ?? newOrder.payment.method ?? 'cash'),
+          received: Number(data.amountReceived ?? newOrder.payment.received ?? 0),
+          change: Number(data.amountChange ?? newOrder.payment.change ?? 0),
+        },
         subtotal: Number(data.subtotal ?? newOrder.subtotal),
         tax: Number(data.tax ?? newOrder.tax),
         discountPercent: Number(data.discountPercent ?? newOrder.discountPercent ?? 0),

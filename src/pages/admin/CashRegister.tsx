@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../components/ui/dialog';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
+import { sanitizeDecimalInput } from '@/lib/validators';
 import { toast } from 'sonner';
 
 export default function CashRegister() {
@@ -426,7 +427,7 @@ export default function CashRegister() {
                 type="number"
                 placeholder="0.00"
                 value={openingAmount}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOpeningAmount(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOpeningAmount(sanitizeDecimalInput(e.target.value))}
                 step="0.01"
                 min="0"
                 className="mt-1"
@@ -474,7 +475,7 @@ export default function CashRegister() {
                 placeholder="0.00"
                 value={movementForm.amount}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setMovementForm({ ...movementForm, amount: e.target.value })
+                  setMovementForm({ ...movementForm, amount: sanitizeDecimalInput(e.target.value) })
                 }
                 step="0.01"
                 min="0"
@@ -537,7 +538,7 @@ export default function CashRegister() {
                   type="number"
                   placeholder="0.00"
                   value={closeForm.actualCash}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCloseForm({ ...closeForm, actualCash: e.target.value })}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCloseForm({ ...closeForm, actualCash: sanitizeDecimalInput(e.target.value) })}
                   step="0.01"
                   min="0"
                   className="mt-1"

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useAdmin } from '@/context/AdminContext';
 import { useAuth } from '@/context/AuthContext';
 import { apiRequest } from '@/lib/api';
+import { sanitizeIntegerInput } from '@/lib/validators';
 
 type MovementType = 'entrada' | 'salida';
 
@@ -56,7 +57,7 @@ export default function Inventory() {
   };
 
   const handleMinDraftChange = (itemId: string, value: string) => {
-    setMinDrafts((prev) => ({ ...prev, [itemId]: value }));
+    setMinDrafts((prev) => ({ ...prev, [itemId]: sanitizeIntegerInput(value) }));
   };
 
   const handleSaveMin = async (itemId: string) => {
@@ -322,7 +323,7 @@ export default function Inventory() {
             type="number"
             min={1}
             value={movementQty}
-            onChange={(e) => setMovementQty(e.target.value)}
+            onChange={(e) => setMovementQty(sanitizeIntegerInput(e.target.value))}
             className="px-3 py-2 border border-border rounded-lg"
             placeholder="Cantidad"
           />

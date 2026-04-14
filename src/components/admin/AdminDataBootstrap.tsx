@@ -28,6 +28,10 @@ function mapProduct(row: Record<string, unknown>): Product {
   };
 }
 
+function normalizeCustomerType(value: unknown): Customer['customerType'] {
+  return String(value ?? '').trim().toLowerCase() === 'mayorista' ? 'mayorista' : 'minorista';
+}
+
 function mapCustomer(row: Record<string, unknown>): Customer {
   return {
     id: String(row.id),
@@ -35,6 +39,7 @@ function mapCustomer(row: Record<string, unknown>): Customer {
     email: String(row.email ?? ''),
     phone: String(row.phone ?? ''),
     company: row.company ? String(row.company) : undefined,
+    customerType: normalizeCustomerType(row.customer_type ?? row.customerType),
     address: String(row.address ?? 'Sin direccion'),
     city: String(row.city ?? ''),
     country: String(row.country ?? 'El Salvador'),
@@ -121,6 +126,11 @@ function mapOrder(row: Record<string, unknown>): Order {
     customerId: String(row.customer_id ?? ''),
     customerName: String(row.customer_name ?? 'Consumidor final'),
     cashierName: String(row.cashier_name ?? row.cashierName ?? ''),
+    payment: {
+      method: String(row.payment_method ?? row.paymentMethod ?? 'cash'),
+      received: Number(row.amount_received ?? row.amountReceived ?? row.total ?? 0),
+      change: Number(row.amount_change ?? row.amountChange ?? 0),
+    },
     subtotal: Number(row.subtotal ?? 0),
     tax: Number(row.tax ?? 0),
     discountPercent: Number(row.discount_percent ?? row.discountPercent ?? 0),

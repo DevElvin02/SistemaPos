@@ -6,6 +6,7 @@ import { useCompanySettings } from '@/hooks/use-company-settings'
 import { generateInvoiceHTML, generateReceiptHTML, printDocument } from '@/lib/utils/invoice-generator'
 import type { Order } from '@/lib/data/orders'
 import { useAuth } from '@/context/AuthContext'
+import { sanitizeDecimalInput, sanitizeIntegerInput } from '@/lib/validators'
 
 interface CreateOrderModalProps {
   isOpen: boolean
@@ -18,6 +19,7 @@ type DocumentType = 'ticket' | 'invoice'
 
 const IVA_RATE = 0.0 // Cambia al porcentaje de IVA que corresponda, por ejemplo 0.13 para 13%
 const roundMoney = (value: number) => Number(value.toFixed(2))
+const normalizeCustomerType = (value?: string) => String(value ?? '').trim().toLowerCase()
 
 export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrderModalProps) {
   const { state } = useAdmin()
@@ -34,6 +36,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
   const [isScannerMode, setIsScannerMode] = useState(false)
   const [selectedProductId, setSelectedProductId] = useState('')
   const [unitPrice, setUnitPrice] = useState('')
+  const [discountedUnitPrice, setDiscountedUnitPrice] = useState('')
   const [quantity, setQuantity] = useState('1')
   const [lineDiscountPercent, setLineDiscountPercent] = useState('0')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
@@ -45,6 +48,23 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
   const [lineItems, setLineItems] = useState<
     Array<{ id: string; productId: string; productName: string; sku: string; unitPrice: number; quantity: number; baseTotal: number; discountPercent: number; discountAmount: number; subtotal: number }>
   >([])
+
+  const selectedCustomer = useMemo(
+    () => state.customers.find((customer) => customer.id === customerId),
+    [customerId, state.customers]
+  )
+  const isWholesaleCustomer = normalizeCustomerType(selectedCustomer?.customerType) === 'mayorista'
+  const parsedOriginalPrice = parseFloat(unitPrice)
+  const parsedManualPrice = parseFloat(discountedUnitPrice)
+  const hasValidOriginalPrice = !Number.isNaN(parsedOriginalPrice) && parsedOriginalPrice > 0
+  const hasManualPrice = !Number.isNaN(parsedManualPrice)
+  const isManualPriceAboveOriginal = hasValidOriginalPrice && hasManualPrice && parsedManualPrice > parsedOriginalPrice
+  const currentLineDiscountAmount = isWholesaleCustomer && hasValidOriginalPrice && hasManualPrice && parsedManualPrice <= parsedOriginalPrice
+    ? roundMoney(parsedOriginalPrice - parsedManualPrice)
+    : 0
+  const currentLineDiscountPercent = isWholesaleCustomer && hasValidOriginalPrice && hasManualPrice && parsedManualPrice <= parsedOriginalPrice
+    ? roundMoney((currentLineDiscountAmount / parsedOriginalPrice) * 100)
+    : 0
 
   const filteredCustomers = useMemo(
     () =>
@@ -99,6 +119,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
     scannerBufferRef.current = ''
     setSelectedProductId('')
     setUnitPrice('')
+    setDiscountedUnitPrice('')
     setQuantity('1')
     setLineDiscountPercent('0')
     setPaymentMethod('cash')
@@ -161,21 +182,95 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
     const selectedProduct = state.products.find((p) => p.id === productId)
     setSearchTerm(selectedProduct?.name ?? '')
     setUnitPrice(selectedProduct ? selectedProduct.price.toFixed(2) : '')
+    setDiscountedUnitPrice(selectedProduct ? selectedProduct.price.toFixed(2) : '')
+    setLineDiscountPercent('0')
     setIsProductSuggestionsOpen(false)
+  }
+
+  const handleDiscountedUnitPriceChange = (value: string) => {
+    setDiscountedUnitPrice(value)
+
+    const parsedPrice = parseFloat(unitPrice)
+    const parsedFinalPrice = parseFloat(value)
+
+    if (!isWholesaleCustomer) {
+      setLineDiscountPercent('0')
+      setDiscountedUnitPrice(unitPrice)
+      return
+    }
+
+    if (Number.isNaN(parsedPrice) || parsedPrice <= 0) {
+      setLineDiscountPercent('0')
+      return
+    }
+
+    if (Number.isNaN(parsedFinalPrice)) {
+      setLineDiscountPercent('0')
+      return
+    }
+
+    if (parsedFinalPrice > parsedPrice) {
+      setLineDiscountPercent('0')
+      return
+    }
+
+    const boundedFinalPrice = Math.max(parsedFinalPrice, 0)
+    const calculatedDiscountPercent = roundMoney(((parsedPrice - boundedFinalPrice) / parsedPrice) * 100)
+    setLineDiscountPercent(calculatedDiscountPercent.toFixed(2))
+  }
+
+  const handleDiscountPercentChange = (value: string) => {
+    setLineDiscountPercent(value)
+
+    if (!isWholesaleCustomer) {
+      setDiscountedUnitPrice(unitPrice)
+      setLineDiscountPercent('0')
+      return
+    }
+
+    const parsedPrice = parseFloat(unitPrice)
+    const parsedDiscountPercent = parseFloat(value)
+
+    if (Number.isNaN(parsedPrice) || parsedPrice <= 0) {
+      setDiscountedUnitPrice('')
+      return
+    }
+
+    if (Number.isNaN(parsedDiscountPercent)) {
+      setDiscountedUnitPrice(unitPrice)
+      setLineDiscountPercent('0')
+      return
+    }
+
+    const boundedDiscountPercent = Math.min(Math.max(parsedDiscountPercent, 0), 100)
+    const discountedPrice = roundMoney(parsedPrice - (parsedPrice * boundedDiscountPercent / 100))
+    setDiscountedUnitPrice(discountedPrice.toFixed(2))
+    setLineDiscountPercent(boundedDiscountPercent.toFixed(2))
   }
 
   const handleCustomerChange = (customerIdValue: string) => {
     setCustomerId(customerIdValue)
     const selectedCustomer = state.customers.find((customer) => customer.id === customerIdValue)
+    const isWholesaleSelection = normalizeCustomerType(selectedCustomer?.customerType) === 'mayorista'
     setCustomerSearchTerm(selectedCustomer?.name ?? '')
     setIsCustomerSuggestionsOpen(false)
+
+    if (unitPrice) {
+      const nextPrice = isWholesaleSelection ? discountedUnitPrice || unitPrice : unitPrice
+      setDiscountedUnitPrice(nextPrice)
+      setLineDiscountPercent(isWholesaleSelection ? lineDiscountPercent : '0')
+    }
   }
 
   const handleAddProduct = () => {
     const selectedProduct = state.products.find((p) => p.id === selectedProductId)
     const parsedPrice = parseFloat(unitPrice)
+    const parsedDiscountedPrice = parseFloat(discountedUnitPrice)
     const parsedQuantity = parseInt(quantity)
-    const parsedDiscountPercent = parseFloat(lineDiscountPercent)
+    const effectiveDiscountedPrice = isWholesaleCustomer ? parsedDiscountedPrice : parsedPrice
+    const calculatedDiscountPercent = isWholesaleCustomer && !Number.isNaN(effectiveDiscountedPrice) && parsedPrice > 0
+      ? roundMoney(((parsedPrice - effectiveDiscountedPrice) / parsedPrice) * 100)
+      : 0
 
     if (!selectedProduct) {
       toast.error('Selecciona un producto')
@@ -187,20 +282,31 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
       return
     }
 
+    if (Number.isNaN(effectiveDiscountedPrice) || effectiveDiscountedPrice < 0) {
+      toast.error('Ingresa un precio con descuento válido')
+      return
+    }
+
+    if (effectiveDiscountedPrice > parsedPrice) {
+      toast.error('El nuevo precio no puede ser mayor al precio original')
+      return
+    }
+
     if (Number.isNaN(parsedQuantity) || parsedQuantity <= 0) {
       toast.error('Ingresa una cantidad válida')
       return
     }
 
-    if (Number.isNaN(parsedDiscountPercent) || parsedDiscountPercent < 0 || parsedDiscountPercent > 100) {
+    if (Number.isNaN(calculatedDiscountPercent) || calculatedDiscountPercent < 0 || calculatedDiscountPercent > 100) {
       toast.error('Ingresa un descuento válido entre 0 y 100')
       return
     }
 
-    addLineItem(selectedProduct.id, selectedProduct.name, selectedProduct.sku, parsedPrice, parsedQuantity, parsedDiscountPercent)
+    addLineItem(selectedProduct.id, selectedProduct.name, selectedProduct.sku, parsedPrice, parsedQuantity, calculatedDiscountPercent)
 
     setSelectedProductId('')
     setUnitPrice('')
+    setDiscountedUnitPrice('')
     setQuantity('1')
     setLineDiscountPercent('0')
     setSearchTerm('')
@@ -463,6 +569,8 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
                     onChange={(e) => {
                       setCustomerSearchTerm(e.target.value)
                       setCustomerId('')
+                      setDiscountedUnitPrice(unitPrice)
+                      setLineDiscountPercent('0')
                       setIsCustomerSuggestionsOpen(true)
                     }}
                     onFocus={() => setIsCustomerSuggestionsOpen(true)}
@@ -500,6 +608,8 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
                           setSearchTerm(e.target.value)
                           setSelectedProductId('')
                           setUnitPrice('')
+                          setDiscountedUnitPrice('')
+                          setLineDiscountPercent('0')
                           setIsProductSuggestionsOpen(true)
                         }}
                         onFocus={() => setIsProductSuggestionsOpen(true)}
@@ -558,13 +668,27 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
                   <div>
-                    <label className="block text-sm font-semibold mb-1">Precio unitario</label>
+                    <label className="block text-sm font-semibold mb-1">Precio original</label>
                     <input
                       type="number"
                       step="0.01"
                       value={unitPrice}
-                      onChange={(e) => setUnitPrice(e.target.value)}
-                      className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                      readOnly
+                      className="w-full px-3 py-2.5 border border-border rounded-xl bg-muted/40 text-muted-foreground focus:outline-none"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold mb-1">Nuevo precio manual</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={discountedUnitPrice}
+                      onChange={(e) => handleDiscountedUnitPriceChange(sanitizeDecimalInput(e.target.value))}
+                      disabled={!isWholesaleCustomer}
+                      className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-muted/40 disabled:text-muted-foreground disabled:cursor-not-allowed"
                       placeholder="0.00"
                     />
                   </div>
@@ -575,7 +699,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
                       type="number"
                       min="1"
                       value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
+                      onChange={(e) => setQuantity(sanitizeIntegerInput(e.target.value))}
                       className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
                       placeholder="1"
                     />
@@ -589,8 +713,9 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
                       min="0"
                       max="100"
                       value={lineDiscountPercent}
-                      onChange={(e) => setLineDiscountPercent(e.target.value)}
-                      className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
+                      onChange={(e) => handleDiscountPercentChange(sanitizeDecimalInput(e.target.value))}
+                      disabled={!isWholesaleCustomer}
+                      className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-muted/40 disabled:text-muted-foreground disabled:cursor-not-allowed"
                       placeholder="0"
                     />
                   </div>
@@ -604,6 +729,21 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
                       Agregar
                     </button>
                   </div>
+                </div>
+
+                <div className={`rounded-xl border px-3 py-2 text-sm ${isManualPriceAboveOriginal ? 'border-destructive/40 bg-destructive/5 text-destructive' : 'border-border/70 bg-background/80 text-muted-foreground'}`}>
+                  {!customerId ? (
+                    <p>Selecciona un cliente para definir si aplica descuento mayorista.</p>
+                  ) : !isWholesaleCustomer ? (
+                    <p>Cliente minorista: no se aplica descuento manual.</p>
+                  ) : isManualPriceAboveOriginal ? (
+                    <p>El nuevo precio no puede ser mayor al precio original del producto.</p>
+                  ) : (
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <span>Descuento aplicado: <span className="font-semibold text-secondary">{formatCurrency(currentLineDiscountAmount)}</span></span>
+                      <span>Porcentaje: <span className="font-semibold text-secondary">{currentLineDiscountPercent.toFixed(2)}%</span></span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -627,6 +767,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
                           <span className="col-span-4 font-medium text-secondary">
                             {line.productName}
                             <span className="ml-2 text-xs text-muted-foreground">{line.sku}</span>
+                            {line.discountAmount > 0 ? <span className="block text-xs text-muted-foreground">Descuento: -{formatCurrency(line.discountAmount)} ({line.discountPercent.toFixed(2)}%)</span> : null}
                           </span>
                           <span className="col-span-2 text-right">${line.unitPrice.toFixed(2)}</span>
                           <span className="col-span-2 text-right">{line.quantity}</span>
@@ -685,7 +826,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
                       step="0.01"
                       min="0"
                       value={amountReceived}
-                      onChange={(e) => setAmountReceived(e.target.value)}
+                      onChange={(e) => setAmountReceived(sanitizeDecimalInput(e.target.value))}
                       className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
                       placeholder="0.00"
                     />

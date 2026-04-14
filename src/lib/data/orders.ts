@@ -92,6 +92,11 @@ export interface Order {
   customerId: string;
   customerName: string;
   cashierName?: string;
+  payment?: {
+    method?: string;
+    received: number;
+    change: number;
+  };
   subtotal?: number;
   tax?: number;
   discountPercent?: number;

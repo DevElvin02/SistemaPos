@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { closeAllSessions } from '@/lib/auth-store';
 import { apiRequest } from '@/lib/api';
 import { persistCompanySettings } from '@/lib/company-settings';
+import { isOptionalPhoneValid, isTextOnlyName, normalizeNameText, normalizePhone, sanitizeNameText, sanitizePhone } from '@/lib/validators';
 
 interface SettingsPayload {
   companyName: string;
@@ -70,19 +71,38 @@ export default function Settings() {
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const nextValue = e.target.name === 'phone'
+      ? sanitizePhone(e.target.value)
+      : e.target.name === 'companyName' || e.target.name === 'country'
+        ? sanitizeNameText(e.target.value)
+        : e.target.value;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [e.target.name]: nextValue,
     });
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
+      const normalizedCompanyName = normalizeNameText(formData.companyName);
+      const normalizedPhone = normalizePhone(formData.phone);
+      if (!isTextOnlyName(normalizedCompanyName)) {
+        toast.error('El nombre de la empresa solo puede contener letras y espacios');
+        return;
+      }
+
+      if (!isOptionalPhoneValid(normalizedPhone)) {
+        toast.error('Ingresa un numero de telefono valido. Solo se permiten numeros y simbolos de telefono');
+        return;
+      }
+
       const data = await apiRequest<SettingsPayload>('/settings', {
         method: 'PUT',
         body: {
           ...formData,
+          companyName: normalizedCompanyName,
+          phone: normalizedPhone,
           twoFactorEnabled: securityData.twoFactorEnabled,
         },
       });
@@ -213,6 +233,7 @@ export default function Settings() {
               <label className="block text-sm font-medium mb-1">Teléfono</label>
               <input
                 type="tel"
+                inputMode="tel"
                 name="phone"
                 value={formData.phone}
                 onChange={handleChange}

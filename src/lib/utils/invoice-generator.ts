@@ -52,6 +52,20 @@ function getOrderTotals(order: Order) {
   return { lines, grossSubtotal, subtotal, discountAmount, taxAmount, totalAmount, totalItems, hasTax, hasDiscount }
 }
 
+function getOrderPayment(order: Order) {
+  const method = String(order.payment?.method ?? 'cash').toLowerCase()
+  const received = Number(order.payment?.received ?? order.amount ?? 0)
+  const change = Number(order.payment?.change ?? 0)
+  const showPaymentBreakdown = method === 'cash' && (received > 0 || change > 0)
+
+  return {
+    method,
+    received,
+    change,
+    showPaymentBreakdown,
+  }
+}
+
 export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
   const { order, customerName, customerEmail, cashierName, companyName, companyAddress, companyEmail, companyPhone, companyCountry } = invoiceData
   const { lines, grossSubtotal, subtotal, discountAmount, taxAmount, totalAmount, totalItems, hasTax, hasDiscount } = getOrderTotals(order)
@@ -347,6 +361,7 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
 export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
   const { order, customerName, cashierName, companyName, companyAddress, companyEmail, companyPhone, companyCountry } = invoiceData
   const { lines, grossSubtotal, subtotal, discountAmount, taxAmount, totalAmount, totalItems, hasTax, hasDiscount } = getOrderTotals(order)
+  const { received, change, showPaymentBreakdown } = getOrderPayment(order)
   const itemRows = lines.length > 0
     ? lines.map((line) => `
           <tr>
@@ -581,6 +596,19 @@ export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
           <span>${formatCurrency(totalAmount)}</span>
         </div>
 
+        ${showPaymentBreakdown ? `
+        <div class="totals" style="margin-top: 10px; margin-bottom: 0;">
+          <div class="total-row">
+            <span>Recibido:</span>
+            <span>${formatCurrency(received)}</span>
+          </div>
+          <div class="total-row">
+            <span>Vuelto:</span>
+            <span>${formatCurrency(change)}</span>
+          </div>
+        </div>
+        ` : ''}
+
         <div class="footer">
           <p>Gracias por su compra</p>
           <p style="margin-top: 5px;">Motorepuestos</p>
@@ -736,6 +764,7 @@ export const generateTicketPDF = async (invoiceData: InvoiceData, filename: stri
   const { jsPDF } = await import('jspdf')
   const { order, customerName, cashierName, companyName, companyAddress, companyPhone, companyEmail, companyCountry } = invoiceData
   const { lines, grossSubtotal, subtotal, discountAmount, taxAmount, totalAmount, totalItems, hasTax, hasDiscount } = getOrderTotals(order)
+  const { received, change, showPaymentBreakdown } = getOrderPayment(order)
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -872,7 +901,7 @@ export const generateTicketPDF = async (invoiceData: InvoiceData, filename: stri
   }
 
   y += 6
-  ensureSpace(hasTax || hasDiscount ? 54 : 30)
+  ensureSpace(showPaymentBreakdown ? 70 : hasTax || hasDiscount ? 54 : 30)
 
   const labelWidth = unitWidth
   const valueWidth = totalWidth
@@ -897,6 +926,14 @@ export const generateTicketPDF = async (invoiceData: InvoiceData, filename: stri
 
   doc.setFontSize(15)
   drawAmountLine('TOTAL', formatCurrency(totalAmount), y, true)
+
+  if (showPaymentBreakdown) {
+    y += 8
+    doc.setFontSize(11)
+    drawAmountLine('Recibido', formatCurrency(received), y)
+    y += 8
+    drawAmountLine('Vuelto', formatCurrency(change), y)
+  }
 
   y += 12
   doc.setFont('helvetica', 'normal')

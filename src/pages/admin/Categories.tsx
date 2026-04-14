@@ -9,6 +9,7 @@ import { Category } from '@/lib/data/categories';
 import { useAdmin } from '@/context/AdminContext';
 import { useAuth } from '@/context/AuthContext';
 import { apiRequest } from '@/lib/api';
+import { isTextOnlyName, normalizeNameText, sanitizeNameText } from '@/lib/validators';
 
 interface CategoryFormData {
   name: string;
@@ -94,13 +95,20 @@ export default function Categories() {
   };
 
   const saveCategory = async () => {
-    if (!formData.name.trim()) {
+    const normalizedName = normalizeNameText(formData.name);
+
+    if (!normalizedName) {
       toast.error('El nombre de la categoria es obligatorio');
       return;
     }
 
+    if (!isTextOnlyName(normalizedName)) {
+      toast.error('El nombre de la categoria solo puede contener letras y espacios');
+      return;
+    }
+
     const duplicate = state.categories.find(
-      (c) => c.name.toLowerCase() === formData.name.trim().toLowerCase() && c.id !== selectedCategory?.id
+      (c) => c.name.toLowerCase() === normalizedName.toLowerCase() && c.id !== selectedCategory?.id
     );
     if (duplicate) {
       toast.error('Ya existe una categoria con ese nombre');
@@ -112,7 +120,7 @@ export default function Categories() {
         const data = await apiRequest<Record<string, unknown>>('/categories', {
           method: 'POST',
           body: {
-            name: formData.name.trim(),
+            name: normalizedName,
             description: formData.description.trim() || null,
             status: formData.status,
           },
@@ -123,7 +131,7 @@ export default function Categories() {
         const data = await apiRequest<Record<string, unknown>>(`/categories/${selectedCategory.id}`, {
           method: 'PUT',
           body: {
-            name: formData.name.trim(),
+            name: normalizedName,
             description: formData.description.trim() || null,
             status: formData.status,
           },
@@ -267,7 +275,7 @@ export default function Categories() {
                 <input
                   type="text"
                   value={formData.name}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, name: sanitizeNameText(e.target.value) }))}
                   className="w-full px-3 py-2 border border-border rounded-lg"
                 />
               </div>

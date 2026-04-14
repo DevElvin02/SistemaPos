@@ -7,7 +7,7 @@ import { DeleteConfirmModal } from '@/components/admin/EntityModals';
 import { useAuth } from '@/context/AuthContext';
 import { createManagedUser, deleteManagedUser, getManagedUsers, updateManagedUser } from '@/lib/auth-store';
 import { User, UserRole } from '@/types/auth';
-import { validateUserForm, isEmailUnique } from '@/lib/validators';
+import { validateUserForm, isEmailUnique, sanitizeNameText } from '@/lib/validators';
 
 interface UserFormData {
   name: string;
@@ -255,7 +255,7 @@ export default function Users() {
                   type="text" 
                   value={formData.name} 
                   onChange={(e) => {
-                    setFormData((prev) => ({ ...prev, name: e.target.value }));
+                    setFormData((prev) => ({ ...prev, name: sanitizeNameText(e.target.value) }));
                     if (formErrors.name) setFormErrors((prev) => ({ ...prev, name: undefined }));
                   }}
                   className={`w-full px-3 py-2 border rounded-lg ${formErrors.name ? 'border-destructive focus:ring-destructive' : 'border-border focus:ring-primary'} focus:outline-none focus:ring-2`}

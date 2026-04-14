@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { createHash } from 'node:crypto';
 import { dbPool } from '../db/pool.js';
+import { isTextOnlyName, normalizeNameText } from '../lib/phone.js';
 
 const router = Router();
 
@@ -48,8 +49,13 @@ router.get('/', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const { email, name, role = 'cajero', password, activo = true } = req.body || {};
-    if (!email || !name || !password) {
+    const normalizedName = normalizeNameText(name);
+    if (!email || !normalizedName || !password) {
       return res.status(400).json({ ok: false, message: 'email, name y password son obligatorios' });
+    }
+
+    if (!isTextOnlyName(normalizedName)) {
+      return res.status(400).json({ ok: false, message: 'El nombre solo puede contener letras y espacios' });
     }
 
     if (String(password).trim().length < 4) {
@@ -67,7 +73,7 @@ router.post('/', async (req, res, next) => {
     const [result] = await dbPool.query(
       `INSERT INTO users (email, name, role, is_active, password_hash)
        VALUES (?, ?, ?, ?, ?)`,
-      [String(email).trim(), String(name).trim(), role === 'admin' ? 'admin' : 'cajero', activo ? 1 : 0, hashPassword(password)]
+      [String(email).trim(), normalizedName, role === 'admin' ? 'admin' : 'cajero', activo ? 1 : 0, hashPassword(password)]
     );
 
     const [rows] = await dbPool.query(
@@ -88,6 +94,15 @@ router.put('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
     const { email, name, role, activo, password } = req.body || {};
+    const normalizedName = normalizeNameText(name);
+
+    if (!email || !normalizedName) {
+      return res.status(400).json({ ok: false, message: 'email y name son obligatorios' });
+    }
+
+    if (!isTextOnlyName(normalizedName)) {
+      return res.status(400).json({ ok: false, message: 'El nombre solo puede contener letras y espacios' });
+    }
 
     const [currentRows] = await dbPool.query(
       `SELECT id, role, is_active FROM users WHERE id = ? LIMIT 1`,
@@ -125,14 +140,14 @@ router.put('/:id', async (req, res, next) => {
         `UPDATE users
          SET email = ?, name = ?, role = ?, is_active = ?, password_hash = ?
          WHERE id = ?`,
-        [String(email).trim(), String(name).trim(), nextRole, nextActive, hashPassword(password), id]
+        [String(email).trim(), normalizedName, nextRole, nextActive, hashPassword(password), id]
       );
     } else {
       await dbPool.query(
         `UPDATE users
          SET email = ?, name = ?, role = ?, is_active = ?
          WHERE id = ?`,
-        [String(email).trim(), String(name).trim(), nextRole, nextActive, id]
+        [String(email).trim(), normalizedName, nextRole, nextActive, id]
       );
     }
 

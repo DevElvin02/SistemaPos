@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { dbPool } from '../db/pool.js';
+import { isTextOnlyName, isValidPhone, normalizeNameText, normalizePhone } from '../lib/phone.js';
 
 const router = Router();
 
@@ -30,8 +31,21 @@ router.get('/', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const { name, contact, productsSold, status, email, phone, website, address, city, country, paymentTerms } = req.body || {};
-    if (!name || !contact) {
+    const normalizedName = normalizeNameText(name);
+    const normalizedPhone = normalizePhone(phone);
+    const resolvedPhone = normalizedPhone && isValidPhone(normalizedPhone)
+      ? normalizedPhone
+      : (isValidPhone(contact) ? normalizePhone(contact) : null);
+    if (!normalizedName || !contact) {
       return res.status(400).json({ ok: false, error: 'name y contact son obligatorios' });
+    }
+
+    if (!isTextOnlyName(normalizedName)) {
+      return res.status(400).json({ ok: false, error: 'El nombre solo puede contener letras y espacios' });
+    }
+
+    if (phone && normalizedPhone && !isValidPhone(normalizedPhone)) {
+      return res.status(400).json({ ok: false, error: 'El numero de telefono del proveedor no es valido' });
     }
 
     const [result] = await dbPool.query(
@@ -40,9 +54,9 @@ router.post('/', async (req, res, next) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, NOW())`,
       [
         `SUP-${Date.now()}`,
-        name,
+        normalizedName,
         contact,
-        phone || contact,
+        resolvedPhone,
         email || null,
         website || null,
         address || 'No especificada',
@@ -72,6 +86,23 @@ router.put('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, contact, productsSold, status, email, phone, website, address, city, country, totalOrders, rating, paymentTerms } = req.body || {};
+    const normalizedName = normalizeNameText(name);
+    const normalizedPhone = normalizePhone(phone);
+    const resolvedPhone = normalizedPhone && isValidPhone(normalizedPhone)
+      ? normalizedPhone
+      : (isValidPhone(contact) ? normalizePhone(contact) : null);
+
+    if (phone && normalizedPhone && !isValidPhone(normalizedPhone)) {
+      return res.status(400).json({ ok: false, error: 'El numero de telefono del proveedor no es valido' });
+    }
+
+    if (!normalizedName || !contact) {
+      return res.status(400).json({ ok: false, error: 'name y contact son obligatorios' });
+    }
+
+    if (!isTextOnlyName(normalizedName)) {
+      return res.status(400).json({ ok: false, error: 'El nombre solo puede contener letras y espacios' });
+    }
 
     await dbPool.query(
       `UPDATE suppliers
@@ -79,9 +110,9 @@ router.put('/:id', async (req, res, next) => {
            is_active = ?, status = ?, products_sold = ?, total_orders = ?, rating = ?, payment_terms = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
-        name,
+        normalizedName,
         contact,
-        phone || contact,
+        resolvedPhone,
         email || null,
         website || null,
         address || 'No especificada',

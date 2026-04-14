@@ -7,6 +7,7 @@ import { useAdmin } from '@/context/AdminContext';
 import { useAuth } from '@/context/AuthContext';
 import { Purchase, PurchaseLine } from '@/lib/data/purchases';
 import { apiRequest } from '@/lib/api';
+import { sanitizeDecimalInput, sanitizeIntegerInput } from '@/lib/validators';
 
 interface PurchaseFormData {
   supplierId: string;
@@ -24,6 +25,10 @@ export default function Purchases() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [formData, setFormData] = useState<PurchaseFormData>(initialFormData);
+  const [supplierQuery, setSupplierQuery] = useState('');
+  const [selectedProductQuery, setSelectedProductQuery] = useState('');
+  const [showSupplierOptions, setShowSupplierOptions] = useState(false);
+  const [showProductOptions, setShowProductOptions] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState('');
   const [quantity, setQuantity] = useState('1');
   const [unitCost, setUnitCost] = useState('');
@@ -76,6 +81,29 @@ export default function Purchases() {
     return [...matched, ...others];
   }, [selectedSupplier, state.products]);
 
+  const filteredSupplierOptions = useMemo(() => {
+    const term = supplierQuery.toLowerCase().trim();
+    if (!term) return state.suppliers;
+
+    return state.suppliers.filter((supplier) =>
+      supplier.name.toLowerCase().includes(term)
+    );
+  }, [supplierQuery, state.suppliers]);
+
+  const filteredProductOptions = useMemo(() => {
+    const term = selectedProductQuery.toLowerCase().trim();
+    if (!term) return productOptions;
+
+    return productOptions.filter((product) => {
+      const name = product.name.toLowerCase();
+      const sku = String(product.sku ?? '').toLowerCase();
+      return name.includes(term) || sku.includes(term);
+    });
+  }, [selectedProductQuery, productOptions]);
+
+  const supplierNeedsSelection = supplierQuery.trim().length > 0 && !formData.supplierId;
+  const productNeedsSelection = selectedProductQuery.trim().length > 0 && !selectedProductId;
+
   const totalItems = useMemo(
     () => lineItems.reduce((acc, line) => acc + line.quantity, 0),
     [lineItems]
@@ -92,10 +120,44 @@ export default function Purchases() {
 
   const resetForm = () => {
     setFormData(initialFormData);
+    setSupplierQuery('');
+    setSelectedProductQuery('');
+    setShowSupplierOptions(false);
+    setShowProductOptions(false);
     setSelectedProductId('');
     setQuantity('1');
     setUnitCost('');
     setLineItems([]);
+  };
+
+  const handleSupplierInputChange = (value: string) => {
+    setSupplierQuery(value);
+    setShowSupplierOptions(true);
+    setFormData((prev) => ({ ...prev, supplierId: '' }));
+  };
+
+  const handleSelectSupplier = (supplierId: string) => {
+    const supplier = state.suppliers.find((item) => item.id === supplierId);
+    if (!supplier) return;
+
+    setFormData((prev) => ({ ...prev, supplierId }));
+    setSupplierQuery(supplier.name);
+    setShowSupplierOptions(false);
+  };
+
+  const handleProductInputChange = (value: string) => {
+    setSelectedProductQuery(value);
+    setShowProductOptions(true);
+    setSelectedProductId('');
+  };
+
+  const handleSelectProduct = (productId: string) => {
+    const product = productOptions.find((item) => item.id === productId);
+    if (!product) return;
+
+    setSelectedProductId(productId);
+    setSelectedProductQuery(product.name);
+    setShowProductOptions(false);
   };
 
   const openPurchaseModal = () => {
@@ -111,7 +173,7 @@ export default function Purchases() {
   const handleAddLine = () => {
     const product = state.products.find((item) => item.id === selectedProductId);
     if (!product) {
-      toast.error('Selecciona un producto');
+      toast.error('Selecciona un producto existente. Si no aparece, debes registrarlo primero');
       return;
     }
 
@@ -157,6 +219,7 @@ export default function Purchases() {
     });
 
     setSelectedProductId('');
+    setSelectedProductQuery('');
     setQuantity('1');
     setUnitCost('');
   };
@@ -172,7 +235,7 @@ export default function Purchases() {
     }
 
     if (!formData.supplierId) {
-      toast.error('Selecciona un proveedor');
+      toast.error('Selecciona un proveedor existente. Si no aparece, debes registrarlo primero');
       return;
     }
 
@@ -313,18 +376,39 @@ export default function Purchases() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Proveedor</label>
-                  <select
-                    value={formData.supplierId}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, supplierId: e.target.value }))}
-                    className="w-full px-3 py-2 border border-border rounded-lg bg-background"
-                  >
-                    <option value="">Seleccionar proveedor...</option>
-                    {state.suppliers.map((supplier) => (
-                      <option key={supplier.id} value={supplier.id}>
-                        {supplier.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={supplierQuery}
+                      onChange={(e) => handleSupplierInputChange(e.target.value)}
+                      onFocus={() => setShowSupplierOptions(true)}
+                      onBlur={() => window.setTimeout(() => setShowSupplierOptions(false), 150)}
+                      className="w-full px-3 py-2 border border-border rounded-lg"
+                      placeholder="Escribe para buscar proveedor..."
+                    />
+
+                    {showSupplierOptions && (
+                      <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
+                        {filteredSupplierOptions.length === 0 ? (
+                          <div className="px-3 py-2 text-sm text-muted-foreground">No hay proveedores guardados con ese texto.</div>
+                        ) : (
+                          filteredSupplierOptions.map((supplier) => (
+                            <button
+                              key={supplier.id}
+                              type="button"
+                              onMouseDown={() => handleSelectSupplier(supplier.id)}
+                              className="block w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                            >
+                              {supplier.name}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {supplierNeedsSelection ? (
+                    <p className="mt-1 text-xs text-amber-600">Debes elegir un proveedor de la lista. Si no aparece, regístralo primero.</p>
+                  ) : null}
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Fecha</label>
@@ -342,18 +426,40 @@ export default function Purchases() {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium mb-1">Producto</label>
-                    <select
-                      value={selectedProductId}
-                      onChange={(e) => setSelectedProductId(e.target.value)}
-                      className="w-full px-3 py-2 border border-border rounded-lg bg-background"
-                    >
-                      <option value="">Seleccionar producto...</option>
-                      {productOptions.map((product) => (
-                        <option key={product.id} value={product.id}>
-                          {product.name}
-                        </option>
-                      ))}
-                    </select>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={selectedProductQuery}
+                          onChange={(e) => handleProductInputChange(e.target.value)}
+                          onFocus={() => setShowProductOptions(true)}
+                          onBlur={() => window.setTimeout(() => setShowProductOptions(false), 150)}
+                          className="w-full px-3 py-2 border border-border rounded-lg"
+                          placeholder="Escribe para buscar producto..."
+                        />
+
+                        {showProductOptions && (
+                          <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
+                            {filteredProductOptions.length === 0 ? (
+                              <div className="px-3 py-2 text-sm text-muted-foreground">No hay productos guardados con ese texto.</div>
+                            ) : (
+                              filteredProductOptions.map((product) => (
+                                <button
+                                  key={product.id}
+                                  type="button"
+                                  onMouseDown={() => handleSelectProduct(product.id)}
+                                  className="block w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                                >
+                                  <span className="font-medium">{product.name}</span>
+                                  <span className="ml-2 text-muted-foreground">{product.sku}</span>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {productNeedsSelection ? (
+                        <p className="mt-1 text-xs text-amber-600">Debes elegir un producto de la lista. Si no aparece, regístralo primero.</p>
+                      ) : null}
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Cantidad</label>
@@ -361,7 +467,7 @@ export default function Purchases() {
                       type="number"
                       min="1"
                       value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
+                      onChange={(e) => setQuantity(sanitizeIntegerInput(e.target.value))}
                       className="w-full px-3 py-2 border border-border rounded-lg"
                     />
                   </div>
@@ -372,7 +478,7 @@ export default function Purchases() {
                       min="0"
                       step="0.01"
                       value={unitCost}
-                      onChange={(e) => setUnitCost(e.target.value)}
+                      onChange={(e) => setUnitCost(sanitizeDecimalInput(e.target.value))}
                       className="w-full px-3 py-2 border border-border rounded-lg"
                     />
                   </div>

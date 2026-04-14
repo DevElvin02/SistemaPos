@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { History, Plus, Search, Star } from 'lucide-react';
 import DataTable from '@/components/admin/DataTable';
 import StatusBadge from '@/components/admin/StatusBadge';
 import { GenericActionButtons } from '@/components/admin/GenericActionButtons';
 import { DeleteConfirmModal } from '@/components/admin/EntityModals';
-import { Customer } from '@/lib/data/customers';
+import { Customer, CustomerType } from '@/lib/data/customers';
 import { isInventoryReversalStatus } from '@/lib/data/orders';
+import { isTextOnlyName, isValidPhone, normalizeNameText, normalizePhone, sanitizeNameText, sanitizePhone } from '@/lib/validators';
 import { toast } from 'sonner';
 import { useAdmin } from '@/context/AdminContext';
 import { useAuth } from '@/context/AuthContext';
@@ -16,6 +18,7 @@ interface CustomerFormData {
   email: string;
   phone: string;
   company: string;
+  customerType: CustomerType;
   address: string;
   city: string;
   country: string;
@@ -27,11 +30,16 @@ type CustomerModalMode = 'create' | 'edit';
 const FREQUENT_ORDERS_THRESHOLD = 5;
 const FREQUENT_SPENT_THRESHOLD = 500;
 
+const normalizeCustomerType = (value: unknown): CustomerType => (
+  String(value ?? '').trim().toLowerCase() === 'mayorista' ? 'mayorista' : 'minorista'
+);
+
 const buildCustomerForm = (customer?: Customer): CustomerFormData => ({
   name: customer?.name ?? '',
   email: customer?.email ?? '',
   phone: customer?.phone ?? '',
   company: customer?.company ?? '',
+  customerType: customer?.customerType ?? 'minorista',
   address: customer?.address ?? '',
   city: customer?.city ?? '',
   country: customer?.country ?? 'El Salvador',
@@ -44,6 +52,7 @@ const mapCustomerRow = (row: Record<string, unknown>): Customer => ({
   email: String(row.email ?? ''),
   phone: String(row.phone ?? ''),
   company: row.company ? String(row.company) : undefined,
+  customerType: normalizeCustomerType(row.customer_type ?? row.customerType),
   address: String(row.address ?? 'Sin direccion'),
   city: String(row.city ?? ''),
   country: String(row.country ?? 'El Salvador'),
@@ -55,7 +64,7 @@ const mapCustomerRow = (row: Record<string, unknown>): Customer => ({
 
 export default function Customers() {
   const { state, dispatch } = useAdmin();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCity, setSelectedCity] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
@@ -70,6 +79,7 @@ export default function Customers() {
   const canCreate = hasPermission('customers.create');
   const canEdit = hasPermission('customers.edit');
   const canDelete = hasPermission('customers.delete');
+  const isCashier = user?.role === 'cajero';
 
   const customerMetrics = useMemo(() => {
     const byId = new Map<string, { totalOrders: number; totalSpent: number; lastPurchase?: Date }>();
@@ -148,13 +158,16 @@ export default function Customers() {
 
   const openCreateModal = () => {
     if (!canCreate) {
-      toast.error('Solo un administrador puede registrar clientes');
+      toast.error('No tienes permiso para registrar clientes');
       return;
     }
 
     setFormMode('create');
     setSelectedCustomer(null);
-    setFormData(buildCustomerForm());
+    setFormData({
+      ...buildCustomerForm(),
+      customerType: isCashier ? 'minorista' : 'minorista',
+    });
     setIsFormModalOpen(true);
   };
 
@@ -171,6 +184,11 @@ export default function Customers() {
   };
 
   const handleSaveCustomer = async () => {
+    const effectiveCustomerType = isCashier ? 'minorista' : formData.customerType;
+    const normalizedName = normalizeNameText(formData.name);
+    const normalizedCompany = normalizeNameText(formData.company);
+    const normalizedPhone = normalizePhone(formData.phone);
+
     const emailTaken = state.customers.some(
       (customer) =>
         customer.email.toLowerCase() === formData.email.toLowerCase() &&
@@ -179,6 +197,21 @@ export default function Customers() {
 
     if (!formData.name.trim() || !formData.email.trim() || !formData.phone.trim() || !formData.city.trim()) {
       toast.error('Completa nombre, email, telefono y ciudad');
+      return;
+    }
+
+    if (!isTextOnlyName(normalizedName)) {
+      toast.error('El nombre solo puede contener letras y espacios');
+      return;
+    }
+
+    if (normalizedCompany && !isTextOnlyName(normalizedCompany)) {
+      toast.error('La empresa solo puede contener letras y espacios');
+      return;
+    }
+
+    if (!isValidPhone(normalizedPhone)) {
+      toast.error('Ingresa un numero de telefono valido. Solo se permiten numeros y simbolos de telefono');
       return;
     }
 
@@ -192,10 +225,11 @@ export default function Customers() {
         const data = await apiRequest<Record<string, unknown>>('/customers', {
           method: 'POST',
           body: {
-            name: formData.name.trim(),
+            name: normalizedName,
             email: formData.email.trim(),
-            phone: formData.phone.trim(),
-            company: formData.company.trim() || null,
+            phone: normalizedPhone,
+            company: normalizedCompany || null,
+            customerType: effectiveCustomerType,
             address: formData.address.trim() || 'Sin direccion',
             city: formData.city.trim(),
             country: formData.country.trim() || 'El Salvador',
@@ -209,10 +243,11 @@ export default function Customers() {
         const data = await apiRequest<Record<string, unknown>>(`/customers/${selectedCustomer.id}`, {
           method: 'PUT',
           body: {
-            name: formData.name.trim(),
+            name: normalizedName,
             email: formData.email.trim(),
-            phone: formData.phone.trim(),
-            company: formData.company.trim() || null,
+            phone: normalizedPhone,
+            company: normalizedCompany || null,
+            customerType: effectiveCustomerType,
             address: formData.address.trim() || selectedCustomer.address,
             city: formData.city.trim(),
             country: formData.country.trim() || selectedCustomer.country,
@@ -289,6 +324,10 @@ export default function Customers() {
     {
       header: 'Empresa',
       accessor: (customer: Customer) => customer.company || '—',
+    },
+    {
+      header: 'Tipo',
+      accessor: (customer: Customer) => customer.customerType === 'mayorista' ? 'Mayorista' : 'Minorista',
     },
     {
       header: 'Ciudad',
@@ -426,9 +465,9 @@ export default function Customers() {
 
       <DataTable columns={columns} data={filteredCustomers} />
 
-      {isFormModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center" onClick={() => setIsFormModalOpen(false)}>
-          <div className="bg-card rounded-lg shadow-lg max-w-2xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
+      {isFormModalOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[120] bg-black/60 flex items-center justify-center p-4" onClick={() => setIsFormModalOpen(false)}>
+          <div className="bg-card rounded-lg shadow-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground p-6 border-b flex items-center justify-between">
               <h2 className="text-xl font-bold">{formMode === 'create' ? 'Registrar Cliente' : 'Editar Cliente'}</h2>
               <button onClick={() => setIsFormModalOpen(false)} className="text-primary-foreground hover:bg-primary/80 p-2 rounded transition">✕</button>
@@ -437,7 +476,7 @@ export default function Customers() {
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Nombre</label>
-                <input type="text" value={formData.name} onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))} className="w-full px-3 py-2 border border-border rounded-lg" />
+                <input type="text" value={formData.name} onChange={(e) => setFormData((prev) => ({ ...prev, name: sanitizeNameText(e.target.value) }))} className="w-full px-3 py-2 border border-border rounded-lg" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Email</label>
@@ -446,11 +485,20 @@ export default function Customers() {
 
               <div>
                 <label className="block text-sm font-medium mb-1">Teléfono</label>
-                <input type="text" value={formData.phone} onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))} className="w-full px-3 py-2 border border-border rounded-lg" />
+                <input type="tel" inputMode="tel" value={formData.phone} onChange={(e) => setFormData((prev) => ({ ...prev, phone: sanitizePhone(e.target.value) }))} className="w-full px-3 py-2 border border-border rounded-lg" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Empresa</label>
-                <input type="text" value={formData.company} onChange={(e) => setFormData((prev) => ({ ...prev, company: e.target.value }))} className="w-full px-3 py-2 border border-border rounded-lg" />
+                <input type="text" value={formData.company} onChange={(e) => setFormData((prev) => ({ ...prev, company: sanitizeNameText(e.target.value) }))} className="w-full px-3 py-2 border border-border rounded-lg" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Tipo de cliente</label>
+                <select value={isCashier ? 'minorista' : formData.customerType} onChange={(e) => setFormData((prev) => ({ ...prev, customerType: e.target.value as CustomerType }))} disabled={isCashier} className="w-full px-3 py-2 border border-border rounded-lg bg-background disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed">
+                  <option value="minorista">Minorista</option>
+                  <option value="mayorista">Mayorista</option>
+                </select>
+                {isCashier ? <p className="mt-1 text-xs text-muted-foreground">El cajero solo puede registrar clientes minoristas.</p> : null}
               </div>
 
               <div className="md:col-span-2">
@@ -460,11 +508,11 @@ export default function Customers() {
 
               <div>
                 <label className="block text-sm font-medium mb-1">Ciudad</label>
-                <input type="text" value={formData.city} onChange={(e) => setFormData((prev) => ({ ...prev, city: e.target.value }))} className="w-full px-3 py-2 border border-border rounded-lg" />
+                <input type="text" value={formData.city} onChange={(e) => setFormData((prev) => ({ ...prev, city: sanitizeNameText(e.target.value) }))} className="w-full px-3 py-2 border border-border rounded-lg" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">País</label>
-                <input type="text" value={formData.country} onChange={(e) => setFormData((prev) => ({ ...prev, country: e.target.value }))} className="w-full px-3 py-2 border border-border rounded-lg" />
+                <input type="text" value={formData.country} onChange={(e) => setFormData((prev) => ({ ...prev, country: sanitizeNameText(e.target.value) }))} className="w-full px-3 py-2 border border-border rounded-lg" />
               </div>
 
               <div className="md:col-span-2">
@@ -482,11 +530,12 @@ export default function Customers() {
               <button onClick={handleSaveCustomer} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition">Guardar</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {historyCustomer && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center" onClick={() => setHistoryCustomer(null)}>
+      {historyCustomer && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[120] bg-black/60 flex items-center justify-center p-4" onClick={() => setHistoryCustomer(null)}>
           <div className="bg-card rounded-lg shadow-lg max-w-4xl w-full mx-4 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground p-6 border-b flex items-center justify-between">
               <div>
@@ -548,7 +597,8 @@ export default function Customers() {
               <button onClick={() => setHistoryCustomer(null)} className="px-4 py-2 rounded-lg border border-border hover:bg-muted transition">Cerrar</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <DeleteConfirmModal

@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dbPool } from '../db/pool.js';
+import { isOptionalPhoneValid, normalizePhone } from '../lib/phone.js';
 
 const router = Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -54,6 +55,7 @@ router.put('/', async (req, res, next) => {
       timezone = 'America/Bogota',
       twoFactorEnabled = false,
     } = req.body || {};
+    const normalizedPhone = normalizePhone(phone);
 
     if (!companyName || !String(companyName).trim()) {
       return res.status(400).json({ ok: false, message: 'companyName es requerido' });
@@ -63,6 +65,10 @@ router.put('/', async (req, res, next) => {
       return res.status(400).json({ ok: false, message: 'email es requerido' });
     }
 
+    if (!isOptionalPhoneValid(normalizedPhone)) {
+      return res.status(400).json({ ok: false, message: 'El numero de telefono no es valido' });
+    }
+
     await dbPool.query(
       `UPDATE system_settings
        SET company_name = ?, email = ?, phone = ?, address = ?, country = ?, timezone = ?, two_factor_enabled = ?
@@ -70,7 +76,7 @@ router.put('/', async (req, res, next) => {
       [
         String(companyName).trim(),
         String(email).trim(),
-        phone ? String(phone).trim() : null,
+        normalizedPhone || null,
         address ? String(address).trim() : null,
         country ? String(country).trim() : null,
         String(timezone).trim(),

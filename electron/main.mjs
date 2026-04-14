@@ -51,12 +51,21 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false,
     },
   })
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
+  })
+
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    console.error(`[electron] No se pudo cargar ${validatedURL}: ${errorDescription} (${errorCode})`)
+    mainWindow.show()
+  })
+
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error('[electron] El renderer se cerró inesperadamente:', details)
   })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {

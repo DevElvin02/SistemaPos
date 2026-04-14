@@ -224,9 +224,11 @@ export async function bootstrapSchema() {
 
   if (await tableExists('customers')) {
     await addColumnIfMissing('customers', 'company', 'company VARCHAR(150) NULL AFTER phone');
+    await addColumnIfMissing('customers', 'customer_type', "customer_type ENUM('minorista', 'mayorista') NOT NULL DEFAULT 'minorista' AFTER company");
     await addColumnIfMissing('customers', 'city', 'city VARCHAR(100) NULL AFTER address');
     await addColumnIfMissing('customers', 'country', 'country VARCHAR(100) NULL AFTER city');
     await addColumnIfMissing('customers', 'status', "status VARCHAR(20) NOT NULL DEFAULT 'active' AFTER is_active");
+    await dbPool.query("UPDATE customers SET customer_type = 'minorista' WHERE customer_type IS NULL OR customer_type = ''");
     await dbPool.query(
       "UPDATE customers SET status = CASE WHEN is_active = 1 AND (status IS NULL OR status = '') THEN 'active' WHEN is_active = 0 AND (status IS NULL OR status = '') THEN 'inactive' ELSE status END"
     );
