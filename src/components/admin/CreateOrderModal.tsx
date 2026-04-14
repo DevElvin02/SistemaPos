@@ -14,6 +14,7 @@ type PaymentMethod = 'cash' | 'transfer'
 type DocumentType = 'ticket' | 'invoice'
 
 const IVA_RATE = 0.0 // Cambia al porcentaje de IVA que corresponda, por ejemplo 0.13 para 13%
+const roundMoney = (value: number) => Number(value.toFixed(2))
 
 export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrderModalProps) {
   const { state } = useAdmin()
@@ -62,19 +63,19 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
   )
 
   const grossSubtotal = useMemo(
-    () => lineItems.reduce((acc, item) => acc + item.baseTotal, 0),
+    () => roundMoney(lineItems.reduce((acc, item) => acc + item.baseTotal, 0)),
     [lineItems]
   )
   const discountAmount = useMemo(
-    () => lineItems.reduce((acc, item) => acc + item.discountAmount, 0),
+    () => roundMoney(lineItems.reduce((acc, item) => acc + item.discountAmount, 0)),
     [lineItems]
   )
   const discountedSubtotal = useMemo(
-    () => lineItems.reduce((acc, item) => acc + item.subtotal, 0),
+    () => roundMoney(lineItems.reduce((acc, item) => acc + item.subtotal, 0)),
     [lineItems]
   )
-  const ivaAmount = useMemo(() => discountedSubtotal * IVA_RATE, [discountedSubtotal])
-  const total = useMemo(() => discountedSubtotal + ivaAmount, [discountedSubtotal, ivaAmount])
+  const ivaAmount = useMemo(() => roundMoney(discountedSubtotal * IVA_RATE), [discountedSubtotal])
+  const total = useMemo(() => roundMoney(discountedSubtotal + ivaAmount), [discountedSubtotal, ivaAmount])
   const totalItems = useMemo(
     () => lineItems.reduce((acc, item) => acc + item.quantity, 0),
     [lineItems]
@@ -83,7 +84,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
     if (paymentMethod !== 'cash') return 0
     const received = parseFloat(amountReceived)
     if (Number.isNaN(received)) return 0
-    return Math.max(received - total, 0)
+    return roundMoney(Math.max(received - total, 0))
   }, [amountReceived, paymentMethod, total])
 
   const resetForm = () => {
@@ -417,14 +418,14 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
       return
     }
 
-    const received = parseFloat(amountReceived)
+    const received = roundMoney(parseFloat(amountReceived))
     if (paymentMethod === 'cash') {
       if (Number.isNaN(received) || received <= 0) {
         toast.error('Ingresa el monto recibido en efectivo')
         return
       }
 
-      if (received < total) {
+      if (roundMoney(received - total) < 0) {
         toast.error('El monto recibido no cubre el total de la venta')
         return
       }

@@ -23,6 +23,9 @@ interface SaleLine {
   productId: string;
   productName: string;
   quantity: number;
+  unitPrice?: number;
+  baseTotal?: number;
+  discountAmount?: number;
   discountPercent?: number;
 }
 
@@ -275,11 +278,10 @@ export default function Orders() {
           paymentMethod: newOrder.payment.method,
           amountReceived: newOrder.payment.received,
           items: saleLines.map((line) => {
-            const product = state.products.find((item) => item.id === line.productId);
             return {
               productId: Number(line.productId),
               quantity: line.quantity,
-              unitPrice: product?.price ?? 0,
+              unitPrice: Number(line.unitPrice ?? 0),
               discountPercent: Number(line.discountPercent ?? 0),
             };
           }),
@@ -299,12 +301,11 @@ export default function Orders() {
         status: normalizeOrderStatus(data.status ?? 'paid'),
         items: newOrder.items,
         lines: saleLines.map((line) => {
-          const product = state.products.find((item) => item.id === line.productId);
-          const unitPrice = product?.price ?? 0;
+          const unitPrice = Number(line.unitPrice ?? 0);
           const quantity = line.quantity;
-          const baseTotal = unitPrice * quantity;
+          const baseTotal = Number(line.baseTotal ?? unitPrice * quantity);
           const discountPercent = Number(line.discountPercent ?? 0);
-          const discountAmount = Number((baseTotal * (discountPercent / 100)).toFixed(2));
+          const discountAmount = Number((line.discountAmount ?? (baseTotal * (discountPercent / 100))).toFixed(2));
 
           return {
             productId: line.productId,

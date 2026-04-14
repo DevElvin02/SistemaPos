@@ -245,6 +245,8 @@ router.post('/', async (req, res, next) => {
   try {
     await connection.beginTransaction();
 
+    const receivedAmount = Number(Number(amountReceived || 0).toFixed(2));
+
     let rawSubtotal = 0;
     let totalDiscountAmount = 0;
     for (const item of items) {
@@ -261,7 +263,7 @@ router.post('/', async (req, res, next) => {
     const tax = Number((subtotal * 0.0).toFixed(2)); // Cambia a 0.13 para calcular el IVA (13%)
     const total = Number((subtotal + tax).toFixed(2));
 
-    if (paymentMethod === 'cash' && Number(amountReceived) < total) {
+    if (paymentMethod === 'cash' && receivedAmount < total) {
       throw new Error('El monto recibido no cubre el total');
     }
 
@@ -328,8 +330,8 @@ router.post('/', async (req, res, next) => {
       [
         saleId,
         paymentMethod,
-        Number(amountReceived || total),
-        paymentMethod === 'cash' ? Number((Number(amountReceived) - total).toFixed(2)) : 0,
+        paymentMethod === 'cash' ? receivedAmount : total,
+        paymentMethod === 'cash' ? Number((receivedAmount - total).toFixed(2)) : 0,
         null,
       ]
     );
