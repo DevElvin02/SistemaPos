@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Order, canCancelOrder, canRefundOrder, canReturnOrder, isInventoryReversalStatus } from '@/lib/data/orders'
+import { Order, canCancelOrder, canRefundOrder, canReturnOrder, getOrderStatusLabel, isInventoryReversalStatus } from '@/lib/data/orders'
 import { useAdmin } from '@/context/AdminContext'
 import { generateInvoiceHTML, generateReceiptHTML, downloadDocument, generateTicketPDF } from '@/lib/utils/invoice-generator'
 import { toast } from 'sonner'
@@ -137,6 +137,7 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder, onRetu
   const canReturn = canReturnOrder(order.status)
   const canRefund = canRefundOrder(order.status)
   const shouldShowReversalHint = !isReversed && !canCancel && (canReturn || canRefund)
+  const orderStatusLabel = getOrderStatusLabel(orderStatus)
 
   return createPortal((
     <>
@@ -164,7 +165,7 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder, onRetu
             {/* Status Alert */}
             {isReversed && (
               <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 p-4 rounded-lg">
-                <p className="font-semibold">Esta venta está en estado {orderStatus}</p>
+                <p className="font-semibold">Esta venta está en estado {orderStatusLabel}</p>
               </div>
             )}
 
@@ -195,7 +196,7 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder, onRetu
                         ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
                         : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
                     }`}>
-                      {isReversed ? orderStatus : 'Completada'}
+                      {isReversed ? orderStatusLabel : 'Entregada'}
                     </p>
                   </div>
                 </div>

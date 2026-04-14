@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, PackageCheck, Search } from 'lucide-react';
 import DataTable from '@/components/admin/DataTable';
 import StatusBadge from '@/components/admin/StatusBadge';
-import { InventoryItem, KardexMovement } from '@/lib/data/inventory';
+import { getInventoryStatusLabel, InventoryItem, KardexMovement } from '@/lib/data/inventory';
 import { toast } from 'sonner';
 import { useAdmin } from '@/context/AdminContext';
 import { useAuth } from '@/context/AuthContext';
@@ -272,7 +272,7 @@ export default function Inventory() {
           <div className="space-y-2">
             {lowStockItems.map((item) => (
               <div key={item.id} className="text-sm">
-                {item.productName}: stock {item.quantity} / minimo {item.minLevel}
+                {item.productName}: stock {item.quantity} / minimo {item.minLevel} / estado {getInventoryStatusLabel(item.status)}
               </div>
             ))}
           </div>

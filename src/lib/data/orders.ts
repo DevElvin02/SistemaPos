@@ -29,6 +29,22 @@ export function normalizeOrderStatus(status: unknown): OrderStatus {
   return 'delivered';
 }
 
+export function getOrderStatusLabel(status: unknown): string {
+  const normalized = normalizeOrderStatus(status);
+
+  switch (normalized) {
+    case 'cancelled':
+      return 'Cancelada';
+    case 'returned':
+      return 'Devuelta';
+    case 'refunded':
+      return 'Reembolsada';
+    case 'delivered':
+    default:
+      return 'Entregada';
+  }
+}
+
 export function isInventoryReversalStatus(status: unknown): boolean {
   const normalized = normalizeOrderStatus(status);
   return normalized === 'cancelled' || normalized === 'returned' || normalized === 'refunded';

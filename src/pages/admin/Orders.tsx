@@ -5,7 +5,7 @@ import StatusBadge from '@/components/admin/StatusBadge';
 import { OrderDetailModal } from '@/components/admin/OrderModals';
 import { OrderActionButtons } from '@/components/admin/OrderActionButtons';
 import { CreateOrderModal } from '@/components/admin/CreateOrderModal';
-import { Order, canCancelOrder, canRefundOrder, canReturnOrder, isInventoryReversalStatus, normalizeOrderStatus, parseOrderLines } from '@/lib/data/orders';
+import { Order, canCancelOrder, canRefundOrder, canReturnOrder, getOrderStatusLabel, isInventoryReversalStatus, normalizeOrderStatus, parseOrderLines } from '@/lib/data/orders';
 import {
   generateInvoiceHTML,
   generateReceiptHTML,
@@ -111,9 +111,9 @@ export default function Orders() {
       });
 
       await loadOrders(`after-${status}`);
-      toast.success(`Venta ${target.orderNumber} actualizada a ${status}`);
+      toast.success(`Venta ${target.orderNumber} actualizada a ${getOrderStatusLabel(status)}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : `No se pudo actualizar la venta a ${status}`);
+      toast.error(error instanceof Error ? error.message : `No se pudo actualizar la venta a ${getOrderStatusLabel(status)}`);
     }
   };
 

@@ -1,4 +1,9 @@
+import { createHash } from 'node:crypto';
 import { dbPool } from './pool.js';
+
+function hashPasswordLegacy(password) {
+  return createHash('sha256').update(String(password)).digest('hex');
+}
 
 function isPermissionError(error) {
   const code = String(error?.code || '');
@@ -107,6 +112,33 @@ async function dropAllFksReferencingUsers() {
   }
 }
 
+async function ensureBootstrapAdminUser() {
+  const [rows] = await dbPool.query(
+    `SELECT COUNT(*) AS total
+     FROM users`
+  );
+
+  if (Number(rows[0]?.total || 0) > 0) return;
+
+  const adminEmail = String(
+    process.env.BOOTSTRAP_ADMIN_EMAIL || process.env.DEFAULT_ADMIN_EMAIL || 'admin@motorepuestos.local'
+  ).trim().toLowerCase();
+  const adminName = String(
+    process.env.BOOTSTRAP_ADMIN_NAME || process.env.DEFAULT_ADMIN_NAME || 'Administrador Principal'
+  ).trim() || 'Administrador Principal';
+  const adminPassword = String(
+    process.env.BOOTSTRAP_ADMIN_PASSWORD || process.env.DEFAULT_ADMIN_PASSWORD || 'Admin123456'
+  ).trim() || 'Admin123456';
+
+  await dbPool.query(
+    `INSERT INTO users (email, name, role, is_active, password_hash)
+     VALUES (?, ?, 'admin', 1, ?)`,
+    [adminEmail, adminName, hashPasswordLegacy(adminPassword)]
+  );
+
+  console.warn(`[DB bootstrap] Se creó un administrador inicial de recuperación: ${adminEmail}`);
+}
+
 export async function bootstrapSchema() {
   await createTableIfMissing('users',
     `CREATE TABLE IF NOT EXISTS users (
@@ -195,6 +227,8 @@ export async function bootstrapSchema() {
     `UPDATE users
      SET role = CASE WHEN role = 'user' THEN 'cajero' ELSE role END`
   );
+
+  await ensureBootstrapAdminUser();
 
   await dbPool.query(
     `DELETE FROM password_reset_tokens

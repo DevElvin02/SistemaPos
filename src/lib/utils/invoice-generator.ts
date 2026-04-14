@@ -1,4 +1,4 @@
-import { Order, type OrderLine } from '../data/orders'
+import { getOrderStatusLabel, Order, type OrderLine } from '../data/orders'
 
 export interface InvoiceData {
   order: Order
@@ -66,9 +66,14 @@ function getOrderPayment(order: Order) {
   }
 }
 
+function getOrderStatusText(order: Order) {
+  return escapeHtml(getOrderStatusLabel(order.status))
+}
+
 export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
   const { order, customerName, customerEmail, cashierName, companyName, companyAddress, companyEmail, companyPhone, companyCountry } = invoiceData
   const { lines, grossSubtotal, subtotal, discountAmount, taxAmount, totalAmount, totalItems, hasTax, hasDiscount } = getOrderTotals(order)
+  const statusText = getOrderStatusText(order)
   const lineRows = lines.length > 0
     ? lines.map((line) => `
             <tr>
@@ -293,7 +298,7 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
           </div>
           <div class="detail-section">
             <h3>Condiciones de Pago</h3>
-            <p><strong>Estado:</strong> ${order.status}</p>
+            <p><strong>Estado:</strong> ${statusText}</p>
             <p><strong>Items:</strong> ${totalItems}</p>
             <p><strong>Cajero:</strong> ${escapeHtml(cashierName || order.cashierName || 'Cajero no disponible')}</p>
           </div>
@@ -362,6 +367,7 @@ export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
   const { order, customerName, cashierName, companyName, companyAddress, companyEmail, companyPhone, companyCountry } = invoiceData
   const { lines, grossSubtotal, subtotal, discountAmount, taxAmount, totalAmount, totalItems, hasTax, hasDiscount } = getOrderTotals(order)
   const { received, change, showPaymentBreakdown } = getOrderPayment(order)
+  const statusText = getOrderStatusText(order)
   const itemRows = lines.length > 0
     ? lines.map((line) => `
           <tr>
@@ -546,7 +552,7 @@ export const generateReceiptHTML = (invoiceData: InvoiceData): string => {
         <div class="customer-info">
           <p><strong>Cliente:</strong> ${customerName}</p>
           <p><strong>Cajero:</strong> ${escapeHtml(cashierName || order.cashierName || 'Cajero no disponible')}</p>
-          <p><strong>Estado:</strong> ${order.status}</p>
+          <p><strong>Estado:</strong> ${statusText}</p>
           <p><strong>Items:</strong> ${totalItems}</p>
         </div>
 
@@ -765,6 +771,7 @@ export const generateTicketPDF = async (invoiceData: InvoiceData, filename: stri
   const { order, customerName, cashierName, companyName, companyAddress, companyPhone, companyEmail, companyCountry } = invoiceData
   const { lines, grossSubtotal, subtotal, discountAmount, taxAmount, totalAmount, totalItems, hasTax, hasDiscount } = getOrderTotals(order)
   const { received, change, showPaymentBreakdown } = getOrderPayment(order)
+  const statusText = getOrderStatusLabel(order.status)
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -830,6 +837,8 @@ export const generateTicketPDF = async (invoiceData: InvoiceData, filename: stri
   doc.text(`Cliente: ${customerName}`, rightX, y, { align: 'right' })
   y += 5
   doc.text(`Cajero: ${cashierName || order.cashierName || 'Cajero no disponible'}`, rightX, y, { align: 'right' })
+  y += 5
+  doc.text(`Estado: ${statusText}`, rightX, y, { align: 'right' })
   y += 5
   doc.text(`Items: ${totalItems}`, rightX, y, { align: 'right' })
 

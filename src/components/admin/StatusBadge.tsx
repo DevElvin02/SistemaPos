@@ -3,6 +3,24 @@ interface StatusBadgeProps {
   variant?: 'default' | 'success' | 'warning' | 'error' | 'info';
 }
 
+const statusLabelMap: Record<string, string> = {
+  active: 'Activo',
+  inactive: 'Inactivo',
+  delivered: 'Entregada',
+  shipped: 'Enviado',
+  processing: 'Procesando',
+  pending: 'Pendiente',
+  cancelled: 'Cancelada',
+  returned: 'Devuelta',
+  refunded: 'Reembolsada',
+  normal: 'Normal',
+  low: 'Bajo',
+  critical: 'Crítico',
+  overstock: 'Sobrestock',
+  discontinued: 'Descontinuado',
+  suspended: 'Suspendido',
+};
+
 const variantStyles = {
   default: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200',
   success: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
@@ -33,14 +51,16 @@ export default function StatusBadge({
   status,
   variant: customVariant,
 }: StatusBadgeProps) {
+  const normalizedStatus = String(status ?? '').trim().toLowerCase();
   const variant =
-    customVariant || (statusVariantMap[status] ?? 'default');
+    customVariant || (statusVariantMap[normalizedStatus] ?? 'default');
+  const label = statusLabelMap[normalizedStatus] ?? (status.charAt(0).toUpperCase() + status.slice(1));
 
   return (
     <span
       className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${variantStyles[variant]}`}
     >
-      {status.charAt(0).toUpperCase() + status.slice(1)}
+      {label}
     </span>
   );
 }

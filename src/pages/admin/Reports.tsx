@@ -3,7 +3,8 @@ import { FileDown } from 'lucide-react';
 import { BarChart, Bar, CartesianGrid, LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import StatusBadge from '@/components/admin/StatusBadge';
 import { useAdmin } from '@/context/AdminContext';
-import { isInventoryReversalStatus } from '@/lib/data/orders';
+import { getInventoryStatusLabel } from '@/lib/data/inventory';
+import { getOrderStatusLabel, isInventoryReversalStatus } from '@/lib/data/orders';
 import { useCompanySettings } from '@/hooks/use-company-settings';
 
 interface OrderLineLike {
@@ -297,7 +298,7 @@ export default function Reports() {
         'Inventario bajo',
         ['Producto', 'Actual', 'Minimo', 'Estado'],
         lowInventory.length > 0
-          ? lowInventory.map((item) => [item.productName, String(item.quantity), String(item.minLevel), item.status])
+          ? lowInventory.map((item) => [item.productName, String(item.quantity), String(item.minLevel), getInventoryStatusLabel(item.status)])
           : [['Sin alertas', '-', '-', '-']]
       );
 
@@ -308,7 +309,7 @@ export default function Reports() {
           order.orderNumber,
           order.customerName,
           formatCurrency(order.amount),
-          order.status,
+          getOrderStatusLabel(order.status),
         ])
       );
 

@@ -12,6 +12,20 @@ export interface InventoryItem {
 
 export type InventoryMovementType = 'entrada' | 'salida';
 
+export function getInventoryStatusLabel(status: InventoryItem['status'] | string): string {
+  switch (String(status ?? '').trim().toLowerCase()) {
+    case 'low':
+      return 'Bajo';
+    case 'critical':
+      return 'Crítico';
+    case 'overstock':
+      return 'Sobrestock';
+    case 'normal':
+    default:
+      return 'Normal';
+  }
+}
+
 export interface KardexMovement {
   id: string;
   date: Date;
