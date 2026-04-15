@@ -9,12 +9,16 @@ import StatusBadge from '@/components/admin/status-badge';
 import { GenericActionButtons } from '@/components/admin/generic-action-buttons';
 import { ProductEditModal, DeleteConfirmModal } from '@/components/admin/entity-modals';
 import { products, Product } from '@/lib/data/products';
-import { toast } from 'sonner';
+import toast from '@/lib/utils/toast-with-sound';
 
 export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filteredProducts, setFilteredProducts] = useState(products);
-  const [productsList, setProductsList] = useState(products);
+  // Filtrar productos duplicados por nombre (solo uno por nombre)
+  const uniqueProducts = Array.from(
+    new Map(products.map(p => [p.name.toLowerCase(), p])).values()
+  );
+  const [filteredProducts, setFilteredProducts] = useState(uniqueProducts);
+  const [productsList, setProductsList] = useState(uniqueProducts);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -22,11 +26,15 @@ export default function ProductsPage() {
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const term = e.target.value.toLowerCase();
     setSearchTerm(term);
+    // Filtrar y asegurar que no haya duplicados por nombre
     const filtered = productsList.filter(
-      (product) =>
-        product.name.toLowerCase().includes(term) ||
-        product.sku.toLowerCase().includes(term) ||
-        product.category.toLowerCase().includes(term)
+      (product, idx, arr) =>
+        arr.findIndex(p => p.name.toLowerCase() === product.name.toLowerCase()) === idx &&
+        (
+          product.name.toLowerCase().includes(term) ||
+          product.sku.toLowerCase().includes(term) ||
+          product.category.toLowerCase().includes(term)
+        )
     );
     setFilteredProducts(filtered);
   };

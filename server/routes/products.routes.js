@@ -45,6 +45,7 @@ router.get('/', async (req, res, next) => {
 
 // ─── POST /api/products ──────────────────────────────────────────────────────
 
+
 router.post('/', async (req, res, next) => {
   const conn = await dbPool.getConnection();
   try {
@@ -58,19 +59,40 @@ router.post('/', async (req, res, next) => {
 
     const categoryId = await resolveCategoryId(conn, category);
 
-    const [productResult] = await conn.query(
-      `INSERT INTO products (category_id, sku, barcode, name, cost_price, sale_price, status, is_active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())`,
-      [categoryId, sku, barcode || null, name, cost_price ?? 0, sale_price, status ?? 'active']
+    // Buscar si ya existe producto por SKU, barcode o nombre (insensible a mayúsculas)
+    const [existingRows] = await conn.query(
+      `SELECT id FROM products WHERE LOWER(name) = LOWER(?) OR sku = ? OR (barcode IS NOT NULL AND barcode = ?)`,
+      [name, sku, barcode || '']
     );
 
-    const productId = productResult.insertId;
-
-    await conn.query(
-      `INSERT INTO inventory (product_id, quantity, min_level) VALUES (?, ?, ?)
-       ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), min_level = VALUES(min_level)`,
-      [productId, stock ?? 0, min_stock ?? 0]
-    );
+    let productId;
+    if (existingRows.length > 0) {
+      // Ya existe: actualizar inventario sumando cantidad
+      productId = existingRows[0].id;
+      // Actualizar datos del producto si se desea (opcional)
+      await conn.query(
+        `UPDATE products SET name=?, category_id=?, cost_price=?, sale_price=?, status=?, updated_at=NOW() WHERE id=?`,
+        [name, categoryId, cost_price ?? 0, sale_price, status ?? 'active', productId]
+      );
+      // Sumar cantidad al inventario
+      await conn.query(
+        `UPDATE inventory SET quantity = quantity + ?, min_level = ? WHERE product_id = ?`,
+        [stock ?? 0, min_stock ?? 0, productId]
+      );
+    } else {
+      // No existe: crear producto nuevo
+      const [productResult] = await conn.query(
+        `INSERT INTO products (category_id, sku, barcode, name, cost_price, sale_price, status, is_active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())`,
+        [categoryId, sku, barcode || null, name, cost_price ?? 0, sale_price, status ?? 'active']
+      );
+      productId = productResult.insertId;
+      await conn.query(
+        `INSERT INTO inventory (product_id, quantity, min_level) VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), min_level = VALUES(min_level)`,
+        [productId, stock ?? 0, min_stock ?? 0]
+      );
+    }
 
     await conn.commit();
 
@@ -89,6 +111,10 @@ router.post('/', async (req, res, next) => {
     res.status(201).json({ ok: true, data: rows[0] });
   } catch (error) {
     await conn.rollback();
+    // Manejo de error por duplicado de nombre
+    if (error && error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ ok: false, error: 'Ya existe un producto con ese nombre.' });
+    }
     next(error);
   } finally {
     conn.release();
@@ -136,6 +162,10 @@ router.put('/:id', async (req, res, next) => {
     res.json({ ok: true, data: rows[0] });
   } catch (error) {
     await conn.rollback();
+    // Manejo de error por duplicado de nombre
+    if (error && error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ ok: false, error: 'Ya existe un producto con ese nombre.' });
+    }
     next(error);
   } finally {
     conn.release();
