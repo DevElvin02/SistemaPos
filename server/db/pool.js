@@ -8,13 +8,13 @@ let poolInstance = null;
 function loadEnvironment() {
   const candidatePaths = [
     process.env.MOTOREPUESTOS_ENV_PATH,
-    process.env.SUBLIMART_ENV_PATH,
     path.join(process.cwd(), '.env'),
     path.join(path.dirname(process.execPath || ''), '.env'),
     process.resourcesPath ? path.join(process.resourcesPath, '.env') : null,
     process.env.ProgramData ? path.join(process.env.ProgramData, 'Motorepuestos', '.env') : null,
-    process.env.ProgramData ? path.join(process.env.ProgramData, 'Sublimart', '.env') : null,
     path.join(path.dirname(process.cwd()), '.env'),
+    process.env.SUBLIMART_ENV_PATH,
+    process.env.ProgramData ? path.join(process.env.ProgramData, 'Sublimart', '.env') : null,
   ].filter(Boolean);
 
   for (const envPath of candidatePaths) {

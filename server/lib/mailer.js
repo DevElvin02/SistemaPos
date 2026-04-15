@@ -1,12 +1,18 @@
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const DEFAULT_APP_NAME = 'Motorepuestos La Bendicion';
+const LEGACY_APP_NAMES = new Set(['sublimart', 'motorepuestos']);
 
 function getBaseUrl() {
   return process.env.APP_BASE_URL || process.env.CORS_ORIGIN || 'http://localhost:5173';
 }
 
 function getAppName() {
-  return process.env.APP_NAME || DEFAULT_APP_NAME;
+  const configuredName = String(process.env.APP_NAME || '').trim();
+  if (!configuredName) return DEFAULT_APP_NAME;
+
+  return LEGACY_APP_NAMES.has(configuredName.toLowerCase())
+    ? DEFAULT_APP_NAME
+    : configuredName;
 }
 
 function getMailFrom(appName) {
