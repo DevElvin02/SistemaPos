@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { dbPool } from '../db/pool.js';
+import { sendSaleInvoiceEmail } from '../lib/mailer.js';
 
 const router = Router();
 
@@ -90,7 +91,7 @@ async function nextSaleNumber(connection) {
 
 async function getSaleById(connection, id) {
   const [sales] = await connection.query(
-    `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name, u.name AS cashier_name,
+    `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name, c.email AS customer_email, u.name AS cashier_name,
             sp.method AS payment_method, sp.amount_received, sp.amount_change,
             s.sale_date, s.document_type, s.subtotal, s.discount_percent, s.discount_amount, s.tax, s.total, s.status,
             COALESCE(SUM(si.quantity), 0) AS items
@@ -100,7 +101,7 @@ async function getSaleById(connection, id) {
      LEFT JOIN sale_payments sp ON sp.sale_id = s.id
      LEFT JOIN sale_items si ON si.sale_id = s.id
      WHERE s.id = ?
-     GROUP BY s.id, s.sale_number, s.customer_id, c.name, u.name, sp.method, sp.amount_received, sp.amount_change, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
+     GROUP BY s.id, s.sale_number, s.customer_id, c.name, c.email, u.name, sp.method, sp.amount_received, sp.amount_change, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
      LIMIT 1`,
     [id]
   );
@@ -174,7 +175,7 @@ async function attachSaleItems(connection, sales) {
 
 async function listSales(connection, limit = 200) {
   const [sales] = await connection.query(
-    `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name, u.name AS cashier_name,
+    `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name, c.email AS customer_email, u.name AS cashier_name,
             sp.method AS payment_method, sp.amount_received, sp.amount_change,
             s.sale_date, s.document_type, s.subtotal, s.discount_percent, s.discount_amount, s.tax, s.total, s.status,
             COALESCE(SUM(si.quantity), 0) AS items
@@ -183,7 +184,7 @@ async function listSales(connection, limit = 200) {
      LEFT JOIN users u ON u.id = s.user_id
      LEFT JOIN sale_payments sp ON sp.sale_id = s.id
      LEFT JOIN sale_items si ON si.sale_id = s.id
-     GROUP BY s.id, s.sale_number, s.customer_id, c.name, u.name, sp.method, sp.amount_received, sp.amount_change, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
+     GROUP BY s.id, s.sale_number, s.customer_id, c.name, c.email, u.name, sp.method, sp.amount_received, sp.amount_change, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
      ORDER BY s.id DESC
      LIMIT ?`,
     [limit]
@@ -224,6 +225,72 @@ router.get('/:id', async (req, res, next) => {
       return res.status(404).json({ ok: false, message: 'Venta no encontrada' });
     }
 
+    next(error);
+  } finally {
+    connection.release();
+  }
+});
+
+router.post('/:id/send-invoice-email', async (req, res, next) => {
+  const connection = await dbPool.getConnection();
+
+  try {
+    const sale = await getSaleById(connection, req.params.id);
+
+    if (!sale) {
+      return res.status(404).json({ ok: false, message: 'Venta no encontrada' });
+    }
+
+    const normalizedStatus = normalizeSaleStatus(sale.status);
+    if (REVERSAL_STATUSES.has(normalizedStatus)) {
+      return res.status(400).json({ ok: false, message: 'No se puede enviar la factura de una venta revertida' });
+    }
+
+    const customerEmail = String(sale.customer_email || '').trim();
+    if (!customerEmail) {
+      return res.status(400).json({ ok: false, message: 'El cliente no tiene un correo registrado' });
+    }
+
+    const [settingsRows] = await connection.query(
+      `SELECT company_name, email, phone, address, country
+       FROM system_settings
+       WHERE id = 1
+       LIMIT 1`
+    );
+
+    const settings = settingsRows[0] || {};
+    const result = await sendSaleInvoiceEmail({
+      to: customerEmail,
+      customerName: sale.customer_name,
+      sale: {
+        id: String(sale.id),
+        saleNumber: String(sale.sale_number),
+        date: sale.sale_date,
+        subtotal: Number(sale.subtotal || 0),
+        discountAmount: Number(sale.discount_amount || 0),
+        tax: Number(sale.tax || 0),
+        total: Number(sale.total || 0),
+        lines: Array.isArray(sale.line_items) ? sale.line_items : [],
+      },
+      companySettings: {
+        companyName: String(settings.company_name || ''),
+        email: String(settings.email || ''),
+        phone: String(settings.phone || ''),
+        address: String(settings.address || ''),
+        country: String(settings.country || ''),
+      },
+    });
+
+    return res.json({
+      ok: true,
+      data: {
+        mode: result.mode,
+        delivered: result.delivered,
+        messageId: result.messageId ?? null,
+        customerEmail,
+      },
+    });
+  } catch (error) {
     next(error);
   } finally {
     connection.release();

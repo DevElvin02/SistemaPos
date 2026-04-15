@@ -254,6 +254,35 @@ export default function Orders() {
     }
   };
 
+  const handleSendInvoiceEmail = async (order: Order) => {
+    if (isInventoryReversalStatus(order.status)) {
+      toast.error('No se puede enviar factura por correo para una venta revertida');
+      return;
+    }
+
+    const customer = state.customers.find((item) => item.id === order.customerId);
+    if (!customer?.email?.trim()) {
+      toast.error('El cliente no tiene un correo registrado');
+      return;
+    }
+
+    try {
+      const data = await apiRequest<Record<string, unknown>>(`/sales/${order.id}/send-invoice-email`, {
+        method: 'POST',
+      });
+
+      const mode = String(data.mode ?? 'resend');
+      if (mode === 'preview') {
+        toast.success(`Factura preparada en modo preview para ${customer.email}`);
+        return;
+      }
+
+      toast.success(`Factura enviada por correo a ${customer.email}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo enviar la factura por correo');
+    }
+  };
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setTimeout(() => setSelectedOrder(null), 300);
@@ -386,6 +415,7 @@ export default function Orders() {
         <OrderActionButtons 
           order={order} 
           onView={handleViewOrder}
+          onEmail={handleSendInvoiceEmail}
           onInvoice={handleGenerateInvoice}
           onPrint={handlePrintTicket}
           onPdf={handleGeneratePdf}
