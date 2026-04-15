@@ -40,7 +40,7 @@ export function generateSaleInvoicePdfBuffer({ sale, customerName, customerEmail
     doc.on('error', reject);
 
     const appName = safeText(companySettings?.companyName) || 'Motorepuestos La Bendicion';
-    const address = safeText(companySettings?.address) || 'Direccion no disponible';
+    const address = safeText(companySettings?.address) || 'A un costado de la clinica de Nhauterique';
     const country = safeText(companySettings?.country);
     const phone = safeText(companySettings?.phone);
     const email = safeText(companySettings?.email);

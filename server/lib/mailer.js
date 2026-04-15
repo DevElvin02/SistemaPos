@@ -118,50 +118,80 @@ export async function sendSaleInvoiceEmail({ to, customerName, sale, companySett
   const appName = String(companySettings?.companyName || getAppName()).trim() || getAppName();
   const subject = `${appName} - Factura ${sale.saleNumber || sale.id}`;
   const lines = Array.isArray(sale.lines) ? sale.lines : [];
+  const invoiceNumber = escapeHtml(sale.saleNumber || sale.id);
+  const invoiceDate = new Date(sale.date).toLocaleDateString('es-ES');
+  const customer = escapeHtml(customerName || 'Cliente general');
+  const customerMail = escapeHtml(to);
+  const address = escapeHtml(companySettings?.address || 'Dirección no disponible');
+  const country = companySettings?.country ? escapeHtml(companySettings.country) : '';
+  const phone = companySettings?.phone ? `Tel: ${escapeHtml(companySettings.phone)}` : '';
+  const email = companySettings?.email ? `Email: ${escapeHtml(companySettings.email)}` : '';
+  const resumen = [
+    { label: 'Subtotal', value: formatCurrency(sale.subtotal) },
+    { label: 'Descuento', value: formatCurrency(sale.discountAmount) },
+    { label: 'IVA', value: formatCurrency(sale.tax) },
+    { label: 'Total', value: formatCurrency(sale.total), bold: true },
+  ];
   const rows = lines.length > 0
-    ? lines.map((line) => `
-        <tr>
-          <td style="padding:10px;border:1px solid #dbe4ea;">${escapeHtml(line.productName)}</td>
-          <td style="padding:10px;border:1px solid #dbe4ea;text-align:center;">${Number(line.quantity || 0)}</td>
-          <td style="padding:10px;border:1px solid #dbe4ea;text-align:right;">${formatCurrency(line.unitPrice)}</td>
-          <td style="padding:10px;border:1px solid #dbe4ea;text-align:right;">${formatCurrency(line.lineTotal)}</td>
+    ? lines.map((line, idx) => `
+        <tr style="background:${idx%2===0?'#fff':'#f8fafc'};">
+          <td style="padding:10px 8px;border:1px solid #dbe4ea;">${escapeHtml(line.productName)}</td>
+          <td style="padding:10px 8px;border:1px solid #dbe4ea;text-align:center;">${Number(line.quantity || 0)}</td>
+          <td style="padding:10px 8px;border:1px solid #dbe4ea;text-align:right;">${formatCurrency(line.unitPrice)}</td>
+          <td style="padding:10px 8px;border:1px solid #dbe4ea;text-align:right;">${formatCurrency(line.lineTotal)}</td>
         </tr>
       `).join('')
     : '<tr><td colspan="4" style="padding:10px;border:1px solid #dbe4ea;text-align:center;">Sin detalle disponible</td></tr>';
 
   const html = `
-    <div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;padding:24px;color:#0f172a;background:#f8fafc;">
-      <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;">
-        <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:24px;">
+    <div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;padding:0;color:#0f172a;background:#f8fafc;">
+      <div style="background:#0f766e;border-radius:18px 18px 0 0;padding:24px 24px 12px 24px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;">
           <div>
-            <h1 style="margin:0 0 8px;font-size:28px;">${escapeHtml(appName)}</h1>
-            <p style="margin:0 0 4px;color:#475569;">${escapeHtml(companySettings?.address || 'Dirección no disponible')}</p>
-            ${companySettings?.country ? `<p style="margin:0 0 4px;color:#475569;">${escapeHtml(companySettings.country)}</p>` : ''}
-            ${companySettings?.phone ? `<p style="margin:0;color:#475569;">Tel: ${escapeHtml(companySettings.phone)}</p>` : ''}
+            <h1 style="margin:0 0 8px;font-size:28px;color:#fff;">${appName}</h1>
+            <p style="margin:0 0 4px;color:#dff7f4;">${address}</p>
+            ${country ? `<p style=\"margin:0 0 4px;color:#dff7f4;\">${country}</p>` : ''}
+            ${(phone || email) ? `<p style=\"margin:0;color:#dff7f4;\">${[phone,email].filter(Boolean).join('  |  ')}</p>` : ''}
           </div>
           <div style="text-align:right;">
-            <h2 style="margin:0 0 8px;font-size:22px;">FACTURA</h2>
-            <p style="margin:0 0 4px;color:#475569;">No. ${escapeHtml(sale.saleNumber || sale.id)}</p>
-            <p style="margin:0;color:#475569;">Fecha: ${new Date(sale.date).toLocaleDateString('es-ES')}</p>
+            <h2 style="margin:0 0 8px;font-size:22px;color:#0f766e;background:#e2f3f1;border-radius:10px;padding:4px 18px;display:inline-block;">FACTURA</h2>
+            <p style="margin:0 0 4px;color:#dff7f4;">No. ${invoiceNumber}</p>
+            <p style="margin:0;color:#dff7f4;">Fecha: ${invoiceDate}</p>
           </div>
         </div>
-        <p style="margin:0 0 16px;">Hola ${escapeHtml(customerName || 'cliente')}, te compartimos la factura de tu compra.</p>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:20px;background:#ffffff;">
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 18px 18px;padding:24px;">
+        <div style="display:flex;gap:18px;margin-bottom:18px;">
+          <div style="flex:1 1 0;background:#f8fafc;border-radius:10px;padding:14px 18px 10px 18px;border:1px solid #dbe4ea;">
+            <div style="font-size:11px;color:#64748b;font-weight:bold;">Cliente</div>
+            <div style="font-size:15px;font-weight:bold;margin-bottom:2px;">${customer}</div>
+            <div style="font-size:12px;color:#334155;">${customerMail}</div>
+          </div>
+          <div style="flex:1 1 0;background:#f8fafc;border-radius:10px;padding:14px 18px 10px 18px;border:1px solid #dbe4ea;">
+            <div style="font-size:11px;color:#64748b;font-weight:bold;">Datos de emisión</div>
+            <div style="font-size:13px;font-weight:bold;margin-bottom:2px;">${appName}</div>
+            <div style="font-size:12px;color:#334155;">${invoiceDate}</div>
+          </div>
+        </div>
+        <p style="margin:0 0 16px;font-size:15px;">Hola <b>${customer}</b>, te compartimos la factura de tu compra.</p>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:20px;background:#fff;">
           <thead>
-            <tr style="background:#f1f5f9;">
-              <th style="padding:10px;border:1px solid #dbe4ea;text-align:left;">Producto</th>
-              <th style="padding:10px;border:1px solid #dbe4ea;text-align:center;">Cant.</th>
-              <th style="padding:10px;border:1px solid #dbe4ea;text-align:right;">P/U</th>
-              <th style="padding:10px;border:1px solid #dbe4ea;text-align:right;">Importe</th>
+            <tr style="background:#e2f3f1;">
+              <th style="padding:10px 8px;border:1px solid #dbe4ea;text-align:left;">Producto</th>
+              <th style="padding:10px 8px;border:1px solid #dbe4ea;text-align:center;">Cant.</th>
+              <th style="padding:10px 8px;border:1px solid #dbe4ea;text-align:right;">P/U</th>
+              <th style="padding:10px 8px;border:1px solid #dbe4ea;text-align:right;">Importe</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
-        <div style="margin-left:auto;max-width:300px;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span>Subtotal</span><strong>${formatCurrency(sale.subtotal)}</strong></div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span>Descuento</span><strong>${formatCurrency(sale.discountAmount)}</strong></div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span>IVA</span><strong>${formatCurrency(sale.tax)}</strong></div>
-          <div style="display:flex;justify-content:space-between;padding-top:10px;border-top:2px solid #cbd5e1;font-size:18px;"><span>Total</span><strong>${formatCurrency(sale.total)}</strong></div>
+        <div style="max-width:320px;margin-left:auto;margin-bottom:18px;background:#f8fafc;border-radius:10px;padding:16px 18px 10px 18px;border:1px solid #dbe4ea;">
+          <div style="font-size:13px;font-weight:bold;color:#0f766e;margin-bottom:8px;">Resumen</div>
+          ${resumen.map(r => `<div style=\"display:flex;justify-content:space-between;margin-bottom:6px;font-size:${r.bold?'17px':'13px'};font-weight:${r.bold?'bold':'normal'};color:${r.bold?'#0f172a':'#334155'};\"><span>${r.label}</span><span>${r.value}</span></div>`).join('')}
+        </div>
+        <div style="text-align:center;margin-top:18px;">
+          <div style="font-size:12px;font-weight:bold;color:#0f766e;">Gracias por su compra.</div>
+          <div style="font-size:10px;color:#64748b;">Documento generado automáticamente por el sistema de facturación.</div>
         </div>
       </div>
     </div>
