@@ -34,7 +34,7 @@ const lowStockItems = inventory.filter((item) => item.status === 'low' || item.s
 
 export default function DashboardPage() {
   const totalRevenue = orders.reduce((sum, order) => sum + order.amount, 0);
-  const completedOrders = orders.filter((o) => o.status === 'delivered').length;
+  const completedOrders = orders.filter((o) => o.status === 'entregado').length;
   const activeProducts = products.filter((p) => p.status === 'active').length;
   const lowStockCount = lowStockItems.length;
 

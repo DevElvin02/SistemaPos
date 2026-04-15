@@ -11,7 +11,7 @@ export default function PurchasesPage() {
       items: 'Premium Coffee Beans (50kg)',
       amount: 1200.00,
       date: '2024-03-20',
-      status: 'delivered',
+      status: 'entregado',
     },
     {
       id: 'PO-002',
@@ -34,7 +34,7 @@ export default function PurchasesPage() {
   const statusColors = {
     pending: 'text-yellow-700 bg-yellow-100',
     processing: 'text-blue-700 bg-blue-100',
-    delivered: 'text-green-700 bg-green-100',
+    entregado: 'text-green-700 bg-green-100',
   };
 
   return (
