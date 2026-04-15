@@ -1,7 +1,24 @@
 const RESEND_API_URL = 'https://api.resend.com/emails';
+const DEFAULT_APP_NAME = 'Motorepuestos La Bendicion';
 
 function getBaseUrl() {
   return process.env.APP_BASE_URL || process.env.CORS_ORIGIN || 'http://localhost:5173';
+}
+
+function getAppName() {
+  return process.env.APP_NAME || DEFAULT_APP_NAME;
+}
+
+function getMailFrom(appName) {
+  const configuredFrom = String(process.env.MAIL_FROM || '').trim();
+  if (!configuredFrom) return configuredFrom;
+
+  const angleMatch = configuredFrom.match(/<([^>]+)>/);
+  if (angleMatch?.[1]) {
+    return `${appName} <${angleMatch[1].trim()}>`;
+  }
+
+  return configuredFrom.includes('@') ? `${appName} <${configuredFrom}>` : configuredFrom;
 }
 
 export function buildPasswordResetLink(token) {
@@ -23,7 +40,7 @@ export async function sendPasswordResetEmail({ to, name, token }) {
   }
 
   const resetLink = buildPasswordResetLink(token);
-  const appName = process.env.APP_NAME || 'Motorepuestos';
+  const appName = getAppName();
   const subject = `${appName} - Recuperacion de contrasena`;
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#0f172a;">
@@ -46,7 +63,7 @@ export async function sendPasswordResetEmail({ to, name, token }) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: process.env.MAIL_FROM,
+      from: getMailFrom(appName),
       to: [to],
       subject,
       html,
