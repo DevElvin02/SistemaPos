@@ -176,7 +176,7 @@ export default function Sidebar({ className, onNavigate }: SidebarProps) {
             />
           </div>
           <div>
-            <h1 className="font-bold text-lg tracking-tight">Motorepuestos</h1>
+            <h1 className="font-bold text-lg tracking-tight">Motorepuestos La Bendición</h1>
             <p className="text-xs text-sidebar-foreground/70">
               {user?.role === 'admin' ? 'Administrador' : 'Cajero'}
             </p>
