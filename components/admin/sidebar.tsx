@@ -115,7 +115,7 @@ export default function Sidebar({ isOpen }: SidebarProps) {
             <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center font-bold text-sm">
               S
             </div>
-            <h1 className="font-bold text-lg">Motorepuestos</h1>
+            <h1 className="font-bold text-lg">Motorepuestos La Bendición</h1>
           </div>
         )}
       </div>
