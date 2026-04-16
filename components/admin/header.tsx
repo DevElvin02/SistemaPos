@@ -20,7 +20,9 @@ export default function Header({ sidebarOpen, onToggleSidebar }: HeaderProps) {
         >
           <Menu className="w-5 h-5" />
         </Button>
-        <h2 className="text-sm font-medium text-slate-600">Admin Dashboard</h2>
+        <h2 className="text-xl font-bold tracking-tight text-secondary">
+          Motorepuestos La Bendición<span className="text-primary">POS</span>
+        </h2>
       </div>
 
       <div className="flex items-center gap-4">
