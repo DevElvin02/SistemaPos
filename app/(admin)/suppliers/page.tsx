@@ -7,9 +7,8 @@ import { Input } from '@/components/ui/input';
 import DataTable from '@/components/admin/data-table';
 import StatusBadge from '@/components/admin/status-badge';
 import { GenericActionButtons } from '@/components/admin/generic-action-buttons';
-import { DeleteConfirmModal } from '@/components/admin/entity-modals';
+import { showConfirm, showToast } from '@/lib/swal';
 import { suppliers, Supplier } from '@/lib/data/suppliers';
-import { toast } from 'sonner';
 
 export default function SuppliersPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -34,9 +33,19 @@ export default function SuppliersPage() {
     toast.success(`Editando proveedor: ${supplier.name}`);
   };
 
-  const handleDelete = (supplier: Supplier) => {
-    setSelectedSupplier(supplier);
-    setIsDeleteModalOpen(true);
+  const handleDelete = async (supplier: Supplier) => {
+    const result = await showConfirm(
+      'Eliminar Proveedor',
+      `¿Está seguro de que desea eliminar al proveedor "${supplier.name}"? Esta acción no se puede deshacer.`,
+      'Eliminar',
+      'Cancelar',
+      { icon: 'warning' }
+    );
+    if (result.isConfirmed) {
+      setSuppliersList(prev => prev.filter(s => s.id !== supplier.id));
+      setFilteredSuppliers(prev => prev.filter(s => s.id !== supplier.id));
+      showToast('Proveedor eliminado exitosamente', 'success');
+    }
   };
 
   const handleConfirmDelete = () => {
@@ -126,14 +135,7 @@ export default function SuppliersPage() {
       {/* Data Table */}
       <DataTable columns={columns} data={filteredSuppliers} />
 
-      {/* Delete Confirmation Modal */}
-      <DeleteConfirmModal
-        title="Eliminar Proveedor"
-        message={`¿Está seguro de que desea eliminar al proveedor "${selectedSupplier?.name}"? Esta acción no se puede deshacer.`}
-        isOpen={isDeleteModalOpen}
-        onConfirm={handleConfirmDelete}
-        onCancel={() => setIsDeleteModalOpen(false)}
-      />
+
     </div>
   );
 }

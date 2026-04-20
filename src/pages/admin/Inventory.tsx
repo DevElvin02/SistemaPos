@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, PackageCheck, Search } f
 import DataTable from '@/components/admin/DataTable';
 import StatusBadge from '@/components/admin/StatusBadge';
 import { getInventoryStatusLabel, InventoryItem, KardexMovement } from '@/lib/data/inventory';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/swal';
 import { useAdmin } from '@/context/AdminContext';
 import { useAuth } from '@/context/AuthContext';
 import { apiRequest } from '@/lib/api';

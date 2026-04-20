@@ -7,9 +7,9 @@ import { Input } from '@/components/ui/input';
 import DataTable from '@/components/admin/data-table';
 import StatusBadge from '@/components/admin/status-badge';
 import { GenericActionButtons } from '@/components/admin/generic-action-buttons';
-import { CustomerEditModal, DeleteConfirmModal } from '@/components/admin/entity-modals';
+import { CustomerEditModal } from '@/components/admin/entity-modals';
+import { showDeleteConfirm, showToast } from '@/lib/swal';
 import { customers, Customer } from '@/lib/data/customers';
-import { toast } from 'sonner';
 
 export default function CustomersPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -45,9 +45,20 @@ export default function CustomersPage() {
     );
   };
 
-  const handleDelete = (customer: Customer) => {
-    setSelectedCustomer(customer);
-    setIsDeleteModalOpen(true);
+  const handleDelete = async (customer: Customer) => {
+    const result = await showDeleteConfirm(
+      'Eliminar Cliente',
+      `¿Está seguro de que desea eliminar al cliente "${customer.name}"? Esta acción no se puede deshacer.`,
+      'Eliminar',
+      'Cancelar'
+    );
+    if (result.isConfirmed) {
+      setCustomersList(prev => prev.filter(c => c.id !== customer.id));
+      setFilteredCustomers(prev => prev.filter(c => c.id !== customer.id));
+      showToast('Cliente eliminado exitosamente', 'success');
+    } else if (result.dismiss === Swal.DismissReason.cancel) {
+      showToast('Eliminación cancelada', 'error');
+    }
   };
 
   const handleConfirmDelete = () => {
@@ -140,14 +151,7 @@ export default function CustomersPage() {
         onSave={handleSaveCustomer}
       />
 
-      {/* Delete Confirmation Modal */}
-      <DeleteConfirmModal
-        title="Eliminar Cliente"
-        message={`¿Está seguro de que desea eliminar al cliente "${selectedCustomer?.name}"? Esta acción no se puede deshacer.`}
-        isOpen={isDeleteModalOpen}
-        onConfirm={handleConfirmDelete}
-        onCancel={() => setIsDeleteModalOpen(false)}
-      />
+
     </div>
   );
 }

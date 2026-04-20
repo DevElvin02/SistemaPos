@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Customer } from '@/lib/data/customers'
 import { Product } from '@/lib/data/products'
-import { toast } from 'sonner'
+import { showToast } from '@/lib/swal';
 
 interface CustomerEditModalProps {
   customer: Customer | null
@@ -26,7 +26,7 @@ export function CustomerEditModal({ customer, isOpen, onClose, onSave }: Custome
 
   const handleSave = () => {
     onSave?.(formData as Customer)
-    toast.success('Cliente actualizado exitosamente')
+    showToast('Cliente actualizado exitosamente', 'success')
     onClose()
   }
 
@@ -110,7 +110,7 @@ export function ProductEditModal({ product, isOpen, onClose, onSave }: ProductEd
 
   const handleSave = () => {
     onSave?.(formData as Product)
-    toast.success('Producto actualizado exitosamente')
+    showToast('Producto actualizado exitosamente', 'success')
     onClose()
   }
 

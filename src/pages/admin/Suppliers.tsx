@@ -6,7 +6,7 @@ import { GenericActionButtons } from '@/components/admin/GenericActionButtons';
 import { DeleteConfirmModal } from '@/components/admin/EntityModals';
 import { Supplier } from '@/lib/data/suppliers';
 import { isTextOnlyName, isValidPhone, normalizeNameText, normalizePhone, sanitizeNameText, sanitizePhone } from '@/lib/validators';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/swal';
 import { useAdmin } from '@/context/AdminContext';
 import { useAuth } from '@/context/AuthContext';
 import { apiRequest } from '@/lib/api';

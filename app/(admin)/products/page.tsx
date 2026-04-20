@@ -7,9 +7,10 @@ import { Input } from '@/components/ui/input';
 import DataTable from '@/components/admin/data-table';
 import StatusBadge from '@/components/admin/status-badge';
 import { GenericActionButtons } from '@/components/admin/generic-action-buttons';
-import { ProductEditModal, DeleteConfirmModal } from '@/components/admin/entity-modals';
+import { ProductEditModal } from '@/components/admin/entity-modals';
+import { showConfirm, showToast } from '@/lib/swal';
 import { products, Product } from '@/lib/data/products';
-import toast from '@/lib/utils/toast-with-sound';
+import { showToast } from '@/lib/swal';
 
 export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -53,9 +54,19 @@ export default function ProductsPage() {
     );
   };
 
-  const handleDelete = (product: Product) => {
-    setSelectedProduct(product);
-    setIsDeleteModalOpen(true);
+  const handleDelete = async (product: Product) => {
+    const result = await showConfirm(
+      'Eliminar Producto',
+      `¿Está seguro de que desea eliminar el producto "${product.name}"? Esta acción no se puede deshacer.`,
+      'Eliminar',
+      'Cancelar',
+      { icon: 'warning' }
+    );
+    if (result.isConfirmed) {
+      setProductsList(prev => prev.filter(p => p.id !== product.id));
+      setFilteredProducts(prev => prev.filter(p => p.id !== product.id));
+      showToast('Producto eliminado exitosamente', 'success');
+    }
   };
 
   const handleConfirmDelete = () => {
@@ -149,14 +160,7 @@ export default function ProductsPage() {
         onSave={handleSaveProduct}
       />
 
-      {/* Delete Confirmation Modal */}
-      <DeleteConfirmModal
-        title="Eliminar Producto"
-        message={`¿Está seguro de que desea eliminar el producto "${selectedProduct?.name}"? Esta acción no se puede deshacer.`}
-        isOpen={isDeleteModalOpen}
-        onConfirm={handleConfirmDelete}
-        onCancel={() => setIsDeleteModalOpen(false)}
-      />
+
     </div>
   );
 }

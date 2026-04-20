@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
-import { toast } from 'sonner';
+import { showToast, showDeleteConfirm } from '@/lib/swal';
 import DataTable from '@/components/admin/DataTable';
 import StatusBadge from '@/components/admin/StatusBadge';
 import { GenericActionButtons } from '@/components/admin/GenericActionButtons';
@@ -85,13 +85,23 @@ export default function Categories() {
     setIsFormOpen(true);
   };
 
-  const openDelete = (category: Category) => {
+  const openDelete = async (category: Category) => {
     if (!canDelete) {
-      toast.error('Solo el admin puede eliminar categorias');
+      showToast('Solo el admin puede eliminar categorías', 'error');
       return;
     }
-    setSelectedCategory(category);
-    setIsDeleteOpen(true);
+    const result = await showDeleteConfirm(
+      'Eliminar Categoría',
+      `¿Está seguro de que desea eliminar la categoría "${category.name}"? Esta acción no se puede deshacer.`,
+      'Eliminar',
+      'Cancelar'
+    );
+    if (result.isConfirmed) {
+      setSelectedCategory(category);
+      confirmDelete();
+    } else if (result.dismiss === Swal.DismissReason.cancel) {
+      showToast('Eliminación cancelada', 'error');
+    }
   };
 
   const saveCategory = async () => {
@@ -111,7 +121,7 @@ export default function Categories() {
       (c) => c.name.toLowerCase() === normalizedName.toLowerCase() && c.id !== selectedCategory?.id
     );
     if (duplicate) {
-      toast.error('Ya existe una categoria con ese nombre');
+      showToast('Ya existe una categoría con ese nombre', 'error');
       return;
     }
 

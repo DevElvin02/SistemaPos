@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, Search, Shield, UserCog, AlertCircle } from 'lucide-react';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/swal';
 import DataTable from '@/components/admin/DataTable';
 import StatusBadge from '@/components/admin/StatusBadge';
 import { DeleteConfirmModal } from '@/components/admin/EntityModals';

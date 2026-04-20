@@ -199,6 +199,10 @@ export default function Sidebar({ className, onNavigate }: SidebarProps) {
                   onClick={() => {
                     if (window.innerWidth < 1024) {
                       onNavigate?.();
+                      // Ejemplo: mostrar toast al navegar en móvil
+                      import("../../lib/swal").then(({ showToast }) => {
+                        showToast(`Navegando a ${item.name}`);
+                      });
                     }
                   }}
                   className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-200 ${

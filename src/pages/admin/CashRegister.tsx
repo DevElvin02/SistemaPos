@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../compo
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
 import { sanitizeDecimalInput } from '@/lib/validators';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/swal';
 
 export default function CashRegister() {
   const { state, dispatch } = useAdmin();

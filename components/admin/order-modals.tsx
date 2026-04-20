@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Order } from '@/lib/data/orders'
 import { customers } from '@/lib/data/customers'
 import { generateInvoiceHTML, generateReceiptHTML, downloadDocument } from '@/lib/utils/invoice-generator'
-import { toast } from 'sonner'
+import { showToast } from '@/lib/swal';
 
 interface OrderModalsProps {
   order: Order | null
@@ -37,9 +37,9 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder }: Orde
         invoiceDate: new Date().toLocaleDateString('es-ES'),
       })
       downloadDocument(invoiceHTML, `Factura-${order.id}.html`)
-      toast.success('Factura generada y descargada exitosamente')
+      showToast('Factura generada y descargada exitosamente', 'success')
     } catch (error) {
-      toast.error('Error al generar la factura')
+      showToast('Error al generar la factura', 'error')
       console.error(error)
     } finally {
       setIsInvoiceGenerating(false)
@@ -58,9 +58,9 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder }: Orde
         invoiceDate: new Date().toLocaleDateString('es-ES'),
       })
       downloadDocument(receiptHTML, `Recibo-${order.id}.html`)
-      toast.success('Recibo generado y descargado exitosamente')
+      showToast('Recibo generado y descargado exitosamente', 'success')
     } catch (error) {
-      toast.error('Error al generar el recibo')
+      showToast('Error al generar el recibo', 'error')
       console.error(error)
     } finally {
       setIsReceiptGenerating(false)
@@ -70,7 +70,7 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder }: Orde
   const handleCancelOrder = () => {
     setOrderStatus('cancelled')
     onCancelOrder?.(order.id)
-    toast.success('Venta cancelada exitosamente')
+    showToast('Venta cancelada exitosamente', 'success')
     setShowCancelConfirm(false)
     setTimeout(onClose, 1500)
   }

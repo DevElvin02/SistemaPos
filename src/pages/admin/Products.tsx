@@ -9,7 +9,7 @@ import { NumericInput } from '@/components/ui/numeric-input';
 import { Product } from '@/lib/data/products';
 import { InventoryItem } from '@/lib/data/inventory';
 import { API_URL, apiRequest } from '@/lib/api';
-import { toast } from 'sonner';
+import { showToast, showDeleteConfirm } from '@/lib/swal';
 import { useAuth } from '@/context/AuthContext';
 import { useAdmin } from '@/context/AdminContext';
 
@@ -399,6 +399,16 @@ export default function Products() {
       return;
     }
 
+    // Validación de nombre duplicado (case-insensitive)
+    const duplicate = state.products.find(
+      (p) => p.name.trim().toLowerCase() === formData.name.trim().toLowerCase() &&
+        (formMode !== 'edit' || p.id !== selectedProduct?.id)
+    );
+    if (duplicate) {
+      showToast('Ya existe un producto con ese nombre', 'error');
+      return;
+    }
+
     if (Number.isNaN(parsedPrice) || parsedPrice <= 0) {
       toast.error('Precio de venta invalido');
       return;
@@ -439,7 +449,7 @@ export default function Products() {
         if (!res.ok) throw new Error(parseProductApiError(json.error || json.message || 'Error al guardar'));
         dispatch({ type: 'ADD_PRODUCT', payload: apiRowToProduct(json.data) });
         await refreshInventoryFromApi();
-        toast.success('Producto agregado en la base de datos');
+        showToast('Producto agregado correctamente', 'success');
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Error de conexión con el servidor');
         return;
@@ -455,9 +465,9 @@ export default function Products() {
         if (!res.ok) throw new Error(parseProductApiError(json.error || json.message || 'Error al actualizar'));
         dispatch({ type: 'UPDATE_PRODUCT', payload: apiRowToProduct(json.data) });
         await refreshInventoryFromApi();
-        toast.success('Producto actualizado en la base de datos');
+        showToast('Producto actualizado correctamente', 'success');
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Error de conexión con el servidor');
+        showToast(err instanceof Error ? err.message : 'Error de conexión con el servidor', 'error');
         return;
       }
     }
@@ -465,14 +475,34 @@ export default function Products() {
     setIsProductModalOpen(false);
   };
 
-  const handleDelete = (product: Product) => {
+  const handleDelete = async (product: Product) => {
     if (!canDelete) {
-      toast.error('Solo un administrador puede eliminar productos');
+      showToast('Solo un administrador puede eliminar productos', 'error');
       return;
     }
 
-    setSelectedProduct(product);
-    setIsDeleteModalOpen(true);
+    const result = await showDeleteConfirm(
+      'Eliminar Producto',
+      `¿Está seguro de que desea eliminar el producto "${product.name}"? Esta acción no se puede deshacer.`,
+      'Eliminar',
+      'Cancelar'
+    );
+    if (result.isConfirmed) {
+      try {
+        const res = await fetch(`${API_URL}/products/${product.id}`, { method: 'DELETE' });
+        if (!res.ok) {
+          const json = await res.json();
+          throw new Error(json.error || json.message || 'Error al eliminar');
+        }
+        dispatch({ type: 'DELETE_PRODUCT', payload: product.id });
+        await refreshInventoryFromApi();
+        showToast('Producto eliminado correctamente', 'success');
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Error de conexión con el servidor', 'error');
+      }
+    } else if (result.dismiss === Swal.DismissReason.cancel) {
+      showToast('Eliminación cancelada', 'error');
+    }
   };
 
   const handleConfirmDelete = async () => {

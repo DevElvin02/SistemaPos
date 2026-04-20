@@ -13,7 +13,7 @@ import {
   printDocument,
   generateTicketPDF,
 } from '@/lib/utils/invoice-generator';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/swal';
 import { useAdmin } from '@/context/AdminContext';
 import { useAuth } from '@/context/AuthContext';
 import { apiRequest } from '@/lib/api';

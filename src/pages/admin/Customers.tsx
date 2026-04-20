@@ -8,7 +8,7 @@ import { DeleteConfirmModal } from '@/components/admin/EntityModals';
 import { Customer, CustomerType } from '@/lib/data/customers';
 import { isInventoryReversalStatus } from '@/lib/data/orders';
 import { isTextOnlyName, isValidPhone, normalizeNameText, normalizePhone, sanitizeNameText, sanitizePhone } from '@/lib/validators';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/swal';
 import { useAdmin } from '@/context/AdminContext';
 import { useAuth } from '@/context/AuthContext';
 import { apiRequest } from '@/lib/api';

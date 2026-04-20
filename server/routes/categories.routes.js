@@ -25,6 +25,15 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'name es obligatorio' });
     }
 
+    // Validar duplicado (case-insensitive)
+    const [existing] = await dbPool.query(
+      'SELECT id FROM categories WHERE LOWER(name) = LOWER(?) LIMIT 1',
+      [name]
+    );
+    if (existing.length > 0) {
+      return res.status(400).json({ ok: false, error: 'Ya existe una categoría con ese nombre.' });
+    }
+
     const [result] = await dbPool.query(
       'INSERT INTO categories (name, description, is_active) VALUES (?, ?, ?)',
       [name, description || null, status === 'inactive' ? 0 : 1]

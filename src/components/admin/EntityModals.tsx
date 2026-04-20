@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Customer } from '@/lib/data/customers'
 import { Product } from '@/lib/data/products'
-import { toast } from 'sonner'
+import { showToast } from '@/lib/swal';
 
 interface CustomerEditModalProps {
   customer: Customer | null
