@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { PackagePlus, Plus, Search } from 'lucide-react';
 import DataTable from '@/components/admin/DataTable';
 import StatusBadge from '@/components/admin/StatusBadge';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/swal';
 import { useAdmin } from '@/context/AdminContext';
 import { useAuth } from '@/context/AuthContext';
 import { Purchase, PurchaseLine } from '@/lib/data/purchases';
@@ -162,7 +162,7 @@ export default function Purchases() {
 
   const openPurchaseModal = () => {
     if (!canCreate) {
-      toast.error('No tienes permiso para registrar compras');
+      showToast('No tienes permiso para registrar compras', 'error');
       return;
     }
 
@@ -173,7 +173,7 @@ export default function Purchases() {
   const handleAddLine = () => {
     const product = state.products.find((item) => item.id === selectedProductId);
     if (!product) {
-      toast.error('Selecciona un producto existente. Si no aparece, debes registrarlo primero');
+      showToast('Selecciona un producto existente. Si no aparece, debes registrarlo primero', 'error');
       return;
     }
 
@@ -181,12 +181,12 @@ export default function Purchases() {
     const parsedCost = parseFloat(unitCost);
 
     if (Number.isNaN(parsedQuantity) || parsedQuantity <= 0) {
-      toast.error('Cantidad invalida');
+      showToast('Cantidad invalida', 'error');
       return;
     }
 
     if (Number.isNaN(parsedCost) || parsedCost <= 0) {
-      toast.error('Costo invalido');
+      showToast('Costo invalido', 'error');
       return;
     }
 
@@ -230,28 +230,28 @@ export default function Purchases() {
 
   const handleSavePurchase = async () => {
     if (!canCreate) {
-      toast.error('No tienes permiso para registrar compras');
+      showToast('No tienes permiso para registrar compras', 'error');
       return;
     }
 
     if (!formData.supplierId) {
-      toast.error('Selecciona un proveedor existente. Si no aparece, debes registrarlo primero');
+      showToast('Selecciona un proveedor existente. Si no aparece, debes registrarlo primero', 'error');
       return;
     }
 
     if (!formData.date) {
-      toast.error('Selecciona una fecha');
+      showToast('Selecciona una fecha', 'error');
       return;
     }
 
     if (lineItems.length === 0) {
-      toast.error('Agrega al menos un producto');
+      showToast('Agrega al menos un producto', 'error');
       return;
     }
 
     const supplier = state.suppliers.find((item) => item.id === formData.supplierId);
     if (!supplier) {
-      toast.error('Proveedor invalido');
+      showToast('Proveedor invalido', 'error');
       return;
     }
 
@@ -295,11 +295,11 @@ export default function Purchases() {
         });
       }
 
-      toast.success('Compra registrada e inventario actualizado');
+      showToast('Compra registrada e inventario actualizado', 'success');
       setIsPurchaseModalOpen(false);
       resetForm();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo registrar la compra');
+      showToast(error instanceof Error ? error.message : 'No se pudo registrar la compra', 'error');
     }
   };
 

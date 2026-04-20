@@ -65,7 +65,7 @@ export default function Categories() {
 
   const openCreate = () => {
     if (!canCreate) {
-      toast.error('Solo el admin puede crear categorias');
+      showToast('Solo el admin puede crear categorias', 'error');
       return;
     }
     setFormMode('create');
@@ -76,7 +76,7 @@ export default function Categories() {
 
   const openEdit = (category: Category) => {
     if (!canEdit) {
-      toast.error('Solo el admin puede editar categorias');
+      showToast('Solo el admin puede editar categorias', 'error');
       return;
     }
     setFormMode('edit');
@@ -108,12 +108,12 @@ export default function Categories() {
     const normalizedName = normalizeNameText(formData.name);
 
     if (!normalizedName) {
-      toast.error('El nombre de la categoria es obligatorio');
+      showToast('El nombre de la categoria es obligatorio', 'error');
       return;
     }
 
     if (!isTextOnlyName(normalizedName)) {
-      toast.error('El nombre de la categoria solo puede contener letras y espacios');
+      showToast('El nombre de la categoria solo puede contener letras y espacios', 'error');
       return;
     }
 
@@ -136,7 +136,7 @@ export default function Categories() {
           },
         });
         dispatch({ type: 'ADD_CATEGORY', payload: mapCategoryRow(data) });
-        toast.success('Categoria agregada');
+        showToast('Categoria agregada', 'success');
       } else if (selectedCategory) {
         const data = await apiRequest<Record<string, unknown>>(`/categories/${selectedCategory.id}`, {
           method: 'PUT',
@@ -147,10 +147,10 @@ export default function Categories() {
           },
         });
         dispatch({ type: 'UPDATE_CATEGORY', payload: mapCategoryRow(data) });
-        toast.success('Categoria actualizada');
+        showToast('Categoria actualizada', 'success');
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo guardar la categoria');
+      showToast(error instanceof Error ? error.message : 'No se pudo guardar la categoria', 'error');
       return;
     }
 
@@ -165,23 +165,23 @@ export default function Categories() {
     );
 
     if (linkedProducts.length > 0) {
-      toast.error('No puedes eliminar una categoria con productos asociados');
+      showToast('No puedes eliminar una categoria con productos asociados', 'error');
       return;
     }
 
     try {
       await apiRequest(`/categories/${selectedCategory.id}`, { method: 'DELETE' });
       dispatch({ type: 'DELETE_CATEGORY', payload: selectedCategory.id });
-      toast.success('Categoria eliminada');
+      showToast('Categoria eliminada', 'success');
       setIsDeleteOpen(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo eliminar la categoria');
+      showToast(error instanceof Error ? error.message : 'No se pudo eliminar la categoria', 'error');
     }
   };
 
   const toggleCategory = async (category: Category) => {
     if (!canEdit) {
-      toast.error('Solo el admin puede activar/desactivar categorias');
+      showToast('Solo el admin puede activar/desactivar categorias', 'error');
       return;
     }
 
@@ -196,7 +196,7 @@ export default function Categories() {
       });
       dispatch({ type: 'UPDATE_CATEGORY', payload: mapCategoryRow(data) });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo actualizar la categoria');
+      showToast(error instanceof Error ? error.message : 'No se pudo actualizar la categoria', 'error');
     }
   };
 

@@ -111,9 +111,9 @@ export default function Orders() {
       });
 
       await loadOrders(`after-${status}`);
-      toast.success(`Venta ${target.orderNumber} actualizada a ${getOrderStatusLabel(status)}`);
+      showToast(`Venta ${target.orderNumber} actualizada a ${getOrderStatusLabel(status)}`, 'success');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : `No se pudo actualizar la venta a ${getOrderStatusLabel(status)}`);
+      showToast(error instanceof Error ? error.message : `No se pudo actualizar la venta a ${getOrderStatusLabel(status)}`, 'error');
     }
   };
 
@@ -188,7 +188,7 @@ export default function Orders() {
 
   const handleGenerateInvoice = async (order: Order) => {
     if (isInventoryReversalStatus(order.status)) {
-      toast.error('No se puede facturar una venta revertida');
+      showToast('No se puede facturar una venta revertida', 'error');
       return;
     }
 
@@ -203,15 +203,15 @@ export default function Orders() {
 
       const invoiceHTML = generateInvoiceHTML(getInvoiceData(detailedOrder));
       downloadDocument(invoiceHTML, `Comprobante-${order.orderNumber}.html`);
-      toast.success(`Comprobante generado para ${order.orderNumber}`);
+      showToast(`Comprobante generado para ${order.orderNumber}`, 'success');
     } catch {
-      toast.error('No se pudo generar el comprobante');
+      showToast('No se pudo generar el comprobante', 'error');
     }
   };
 
   const handlePrintTicket = async (order: Order) => {
     if (isInventoryReversalStatus(order.status)) {
-      toast.error('No se puede imprimir ticket de una venta revertida');
+      showToast('No se puede imprimir ticket de una venta revertida', 'error');
       return;
     }
 
@@ -226,15 +226,15 @@ export default function Orders() {
 
       const receiptHTML = generateReceiptHTML(getInvoiceData(detailedOrder));
       printDocument(receiptHTML);
-      toast.success(`Ticket enviado a impresion: ${order.orderNumber}`);
+      showToast(`Ticket enviado a impresion: ${order.orderNumber}`, 'success');
     } catch {
-      toast.error('No se pudo imprimir el ticket');
+      showToast('No se pudo imprimir el ticket', 'error');
     }
   };
 
   const handleGeneratePdf = async (order: Order) => {
     if (isInventoryReversalStatus(order.status)) {
-      toast.error('No se puede generar PDF de una venta revertida');
+      showToast('No se puede generar PDF de una venta revertida', 'error');
       return;
     }
 
@@ -248,21 +248,21 @@ export default function Orders() {
       }
 
       await generateTicketPDF(getInvoiceData(detailedOrder), `Ticket-${order.orderNumber}.pdf`);
-      toast.success(`PDF generado para ${order.orderNumber}`);
+      showToast(`PDF generado para ${order.orderNumber}`, 'success');
     } catch {
-      toast.error('No se pudo generar el PDF');
+      showToast('No se pudo generar el PDF', 'error');
     }
   };
 
   const handleSendInvoiceEmail = async (order: Order) => {
     if (isInventoryReversalStatus(order.status)) {
-      toast.error('No se puede enviar factura por correo para una venta revertida');
+      showToast('No se puede enviar factura por correo para una venta revertida', 'error');
       return;
     }
 
     const customer = state.customers.find((item) => item.id === order.customerId);
     if (!customer?.email?.trim()) {
-      toast.error('El cliente no tiene un correo registrado');
+      showToast('El cliente no tiene un correo registrado', 'error');
       return;
     }
 
@@ -273,13 +273,13 @@ export default function Orders() {
 
       const mode = String(data.mode ?? 'resend');
       if (mode === 'preview') {
-        toast.success(`Factura preparada en modo preview para ${customer.email}`);
+        showToast(`Factura preparada en modo preview para ${customer.email}`, 'success');
         return;
       }
 
-      toast.success(`Factura enviada por correo a ${customer.email}`);
+      showToast(`Factura enviada por correo a ${customer.email}`, 'success');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo enviar la factura por correo');
+      showToast(error instanceof Error ? error.message : 'No se pudo enviar la factura por correo', 'error');
     }
   };
 
@@ -294,12 +294,12 @@ export default function Orders() {
     for (const line of saleLines) {
       const inventoryItem = state.inventory.find((item) => item.productId === line.productId);
       if (!inventoryItem) {
-        toast.error(`No existe inventario para ${line.productName}`);
+        showToast(`No existe inventario para ${line.productName}`, 'error');
         return false;
       }
 
       if (line.quantity > inventoryItem.quantity) {
-        toast.error(`Stock insuficiente para ${line.productName}. Disponible: ${inventoryItem.quantity}`);
+        showToast(`Stock insuficiente para ${line.productName}. Disponible: ${inventoryItem.quantity}`, 'error');
         return false;
       }
     }
@@ -379,7 +379,7 @@ export default function Orders() {
       await loadOrders('after-create');
       return true;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo registrar la venta');
+      showToast(error instanceof Error ? error.message : 'No se pudo registrar la venta', 'error');
       return false;
     }
   };

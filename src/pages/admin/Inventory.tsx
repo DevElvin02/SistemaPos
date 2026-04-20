@@ -66,7 +66,7 @@ export default function Inventory() {
 
     const parsed = parseInt(draft, 10);
     if (Number.isNaN(parsed) || parsed < 0) {
-      toast.error('Stock minimo invalido');
+      showToast('Stock minimo invalido', 'error');
       return;
     }
 
@@ -80,7 +80,7 @@ export default function Inventory() {
       });
       dispatch({ type: 'UPDATE_INVENTORY_ITEM', payload: { id: itemId, minLevel: parsed } });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo actualizar el stock minimo');
+      showToast(error instanceof Error ? error.message : 'No se pudo actualizar el stock minimo', 'error');
       return;
     }
 
@@ -90,31 +90,31 @@ export default function Inventory() {
       return next;
     });
 
-    toast.success('Stock minimo actualizado');
+    showToast('Stock minimo actualizado', 'success');
   };
 
   const registerMovement = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!movementProductId) {
-      toast.error('Selecciona un producto');
+      showToast('Selecciona un producto', 'error');
       return;
     }
 
     const qty = parseInt(movementQty, 10);
     if (Number.isNaN(qty) || qty <= 0) {
-      toast.error('Cantidad invalida');
+      showToast('Cantidad invalida', 'error');
       return;
     }
 
     const selected = state.inventory.find((item) => item.productId === movementProductId);
     if (!selected) {
-      toast.error('Producto no encontrado en inventario');
+      showToast('Producto no encontrado en inventario', 'error');
       return;
     }
 
     if (movementType === 'salida' && qty > selected.quantity) {
-      toast.error('No hay stock suficiente para la salida');
+      showToast('No hay stock suficiente para la salida', 'error');
       return;
     }
 
@@ -142,14 +142,14 @@ export default function Inventory() {
         },
       });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo registrar el movimiento');
+      showToast(error instanceof Error ? error.message : 'No se pudo registrar el movimiento', 'error');
       return;
     }
 
     setMovementQty('1');
     setMovementReason('');
     setMovementReference('');
-    toast.success(`Movimiento de ${movementType} registrado`);
+    showToast(`Movimiento de ${movementType} registrado`, 'success');
   };
 
   const columns = [

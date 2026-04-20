@@ -267,7 +267,7 @@ export default function Products() {
 
   const openCreateModal = () => {
     if (!canCreate) {
-      toast.error('Solo un administrador puede agregar productos');
+      showToast('Solo un administrador puede agregar productos', 'error');
       return;
     }
 
@@ -282,7 +282,7 @@ export default function Products() {
 
   const handleEdit = (product: Product) => {
     if (!canEdit) {
-      toast.error('Solo un administrador puede editar productos');
+      showToast('Solo un administrador puede editar productos', 'error');
       return;
     }
 
@@ -322,7 +322,7 @@ export default function Products() {
       ...prev,
       sku: nextSku,
     }));
-    toast.success(`SKU generado: ${nextSku}`);
+    showToast(`SKU generado: ${nextSku}`, 'success');
   };
 
   const handleGenerateBarcode = () => {
@@ -369,7 +369,7 @@ export default function Products() {
       return { ...prev, barcode: normalizedBarcode };
     });
     playScannerSuccessTone();
-    toast.success('Codigo capturado desde el scanner');
+    showToast('Codigo capturado desde el scanner', 'success');
   };
 
   const handleArmBarcodeScanner = () => {
@@ -384,7 +384,7 @@ export default function Products() {
 
   const handleSaveProduct = async () => {
     if ((formMode === 'create' && !canCreate) || (formMode === 'edit' && !canEdit)) {
-      toast.error('No tienes permisos para guardar cambios de productos');
+      showToast('No tienes permisos para guardar cambios de productos', 'error');
       return;
     }
 
@@ -395,7 +395,7 @@ export default function Products() {
     const resolvedSku = formData.sku.trim() || buildNextAutoSku(state.products, formData.name, selectedProduct?.id ?? null);
 
     if (!formData.name || !formData.category || !formData.barcode) {
-      toast.error('Completa nombre, categoria, codigo de barras y SKU');
+      showToast('Completa nombre, categoria, codigo de barras y SKU', 'error');
       return;
     }
 
@@ -410,17 +410,17 @@ export default function Products() {
     }
 
     if (Number.isNaN(parsedPrice) || parsedPrice <= 0) {
-      toast.error('Precio de venta invalido');
+      showToast('Precio de venta invalido', 'error');
       return;
     }
 
     if (Number.isNaN(parsedCost) || parsedCost < 0) {
-      toast.error('Costo invalido');
+      showToast('Costo invalido', 'error');
       return;
     }
 
     if (Number.isNaN(parsedStock) || parsedStock < 0 || Number.isNaN(parsedMinStock) || parsedMinStock < 0) {
-      toast.error('Stock y stock minimo deben ser numeros validos');
+      showToast('Stock y stock minimo deben ser numeros validos', 'error');
       return;
     }
 
@@ -451,7 +451,7 @@ export default function Products() {
         await refreshInventoryFromApi();
         showToast('Producto agregado correctamente', 'success');
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Error de conexión con el servidor');
+        showToast(err instanceof Error ? err.message : 'Error de conexión con el servidor', 'error');
         return;
       }
     } else if (selectedProduct) {
@@ -507,7 +507,7 @@ export default function Products() {
 
   const handleConfirmDelete = async () => {
     if (!canDelete) {
-      toast.error('No tienes permiso para eliminar productos');
+      showToast('No tienes permiso para eliminar productos', 'error');
       return;
     }
 
@@ -520,17 +520,17 @@ export default function Products() {
         }
         dispatch({ type: 'DELETE_PRODUCT', payload: selectedProduct.id });
         await refreshInventoryFromApi();
-        toast.success('Producto eliminado de la base de datos');
+        showToast('Producto eliminado de la base de datos', 'success');
         setIsDeleteModalOpen(false);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Error de conexión con el servidor');
+        showToast(err instanceof Error ? err.message : 'Error de conexión con el servidor', 'error');
       }
     }
   };
 
   const handleToggleStatus = async (product: Product) => {
     if (!canEdit) {
-      toast.error('Solo un administrador puede activar o desactivar productos');
+      showToast('Solo un administrador puede activar o desactivar productos', 'error');
       return;
     }
 
@@ -556,9 +556,9 @@ export default function Products() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Error al actualizar estado');
       dispatch({ type: 'UPDATE_PRODUCT', payload: apiRowToProduct(json.data) });
-      toast.success(nextStatus === 'active' ? 'Producto activado' : 'Producto desactivado');
+      showToast(nextStatus === 'active' ? 'Producto activado' : 'Producto desactivado', 'success');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error de conexión con el servidor');
+      showToast(err instanceof Error ? err.message : 'Error de conexión con el servidor', 'error');
     }
   };
 

@@ -42,11 +42,11 @@ export default function CashRegister() {
 
   const handleOpenSession = async () => {
     if (!openingAmount || parseFloat(openingAmount) < 0) {
-      toast.error('Ingresa un monto válido');
+      showToast('Ingresa un monto válido', 'error');
       return;
     }
     if (!user?.id) {
-      toast.error('Usuario no identificado');
+      showToast('Usuario no identificado', 'error');
       return;
     }
 
@@ -75,26 +75,26 @@ export default function CashRegister() {
         ],
       });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo abrir la caja');
+      showToast(error instanceof Error ? error.message : 'No se pudo abrir la caja', 'error');
       return;
     }
 
-    toast.success('Caja abierta exitosamente');
+    showToast('Caja abierta exitosamente', 'success');
     setOpeningAmount('');
     setIsOpenDialogOpen(false);
   };
 
   const handleAddMovement = async () => {
     if (!activeSession) {
-      toast.error('No hay caja abierta');
+      showToast('No hay caja abierta', 'error');
       return;
     }
     if (!movementForm.amount || parseFloat(movementForm.amount) <= 0) {
-      toast.error('Ingresa un monto válido');
+      showToast('Ingresa un monto válido', 'error');
       return;
     }
     if (!movementForm.reason.trim()) {
-      toast.error('Ingresa un motivo');
+      showToast('Ingresa un motivo', 'error');
       return;
     }
 
@@ -122,11 +122,11 @@ export default function CashRegister() {
         },
       });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo registrar el movimiento');
+      showToast(error instanceof Error ? error.message : 'No se pudo registrar el movimiento', 'error');
       return;
     }
 
-    toast.success('Movimiento registrado');
+    showToast('Movimiento registrado', 'success');
     setMovementForm({ type: 'gasto', amount: '', reason: '' });
     setIsMovementDialogOpen(false);
   };
@@ -134,11 +134,11 @@ export default function CashRegister() {
   const handleCloseSession = async () => {
     if (!activeSession) return;
     if (!closeForm.actualCash || parseFloat(closeForm.actualCash) < 0) {
-      toast.error('Ingresa la cantidad de dinero en caja');
+      showToast('Ingresa la cantidad de dinero en caja', 'error');
       return;
     }
     if (!user?.id) {
-      toast.error('Usuario no identificado');
+      showToast('Usuario no identificado', 'error');
       return;
     }
 
@@ -162,11 +162,11 @@ export default function CashRegister() {
         },
       });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo cerrar la caja');
+      showToast(error instanceof Error ? error.message : 'No se pudo cerrar la caja', 'error');
       return;
     }
 
-    toast.success('Caja cerrada');
+    showToast('Caja cerrada', 'success');
     setCloseForm({ actualCash: '', notes: '' });
     setIsCloseDialogOpen(false);
   };
