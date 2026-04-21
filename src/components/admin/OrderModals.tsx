@@ -50,9 +50,9 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder, onRetu
         invoiceDate: new Date().toLocaleDateString('es-ES'),
       })
       downloadDocument(invoiceHTML, `Factura-${order.id}.html`)
-      toast.success('Factura generada y descargada exitosamente')
+      showToast('Factura generada y descargada exitosamente', 'success')
     } catch (error) {
-      toast.error('Error al generar la factura')
+      showToast('Error al generar la factura', 'error')
       console.error(error)
     } finally {
       setIsInvoiceGenerating(false)
@@ -75,9 +75,9 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder, onRetu
         invoiceDate: new Date().toLocaleDateString('es-ES'),
       })
       downloadDocument(receiptHTML, `Recibo-${order.id}.html`)
-      toast.success('Recibo generado y descargado exitosamente')
+      showToast('Recibo generado y descargado exitosamente', 'success')
     } catch (error) {
-      toast.error('Error al generar el recibo')
+      showToast('Error al generar el recibo', 'error')
       console.error(error)
     } finally {
       setIsReceiptGenerating(false)
@@ -99,9 +99,9 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder, onRetu
         companyCountry: companySettings.country,
         invoiceDate: new Date().toLocaleDateString('es-ES'),
       }, `Ticket-${order.orderNumber}.pdf`)
-      toast.success('PDF generado y descargado exitosamente')
+      showToast('PDF generado y descargado exitosamente', 'success')
     } catch (error) {
-      toast.error('Error al generar el PDF')
+      showToast('Error al generar el PDF', 'error')
       console.error(error)
     } finally {
       setIsPdfGenerating(false)
@@ -111,7 +111,7 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder, onRetu
   const handleCancelOrder = () => {
     setOrderStatus('cancelled')
     onCancelOrder?.(order.id)
-    toast.success('Venta cancelada exitosamente')
+    showToast('Venta cancelada exitosamente', 'success')
     setShowCancelConfirm(false)
     setTimeout(onClose, 1500)
   }
@@ -119,7 +119,7 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder, onRetu
   const handleReturnOrder = () => {
     setOrderStatus('returned')
     onReturnOrder?.(order.id)
-    toast.success('Devolución registrada exitosamente')
+    showToast('Devolución registrada exitosamente', 'success')
     setShowCancelConfirm(false)
     setTimeout(onClose, 1500)
   }
@@ -127,7 +127,7 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder, onRetu
   const handleRefundOrder = () => {
     setOrderStatus('refunded')
     onRefundOrder?.(order.id)
-    toast.success('Reembolso registrado exitosamente')
+    showToast('Reembolso registrado exitosamente', 'success')
     setShowCancelConfirm(false)
     setTimeout(onClose, 1500)
   }

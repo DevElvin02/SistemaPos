@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/swal';
 import { useAuth } from '@/context/AuthContext';
 import { closeAllSessions } from '@/lib/auth-store';
 import { apiRequest } from '@/lib/api';
@@ -61,7 +61,7 @@ export default function Settings() {
             : 'Sin respaldo',
         });
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'No se pudo cargar la configuración');
+        showToast(error instanceof Error ? error.message : 'No se pudo cargar la configuración', 'error');
       } finally {
         setLoading(false);
       }
@@ -88,12 +88,12 @@ export default function Settings() {
       const normalizedCompanyName = normalizeNameText(formData.companyName);
       const normalizedPhone = normalizePhone(formData.phone);
       if (!isTextOnlyName(normalizedCompanyName)) {
-        toast.error('El nombre de la empresa solo puede contener letras y espacios');
+        showToast('El nombre de la empresa solo puede contener letras y espacios', 'error');
         return;
       }
 
       if (!isOptionalPhoneValid(normalizedPhone)) {
-        toast.error('Ingresa un numero de telefono valido. Solo se permiten numeros y simbolos de telefono');
+        showToast('Ingresa un numero de telefono valido. Solo se permiten numeros y simbolos de telefono', 'error');
         return;
       }
 
@@ -113,9 +113,9 @@ export default function Settings() {
         twoFactorEnabled: Boolean(data.twoFactorEnabled),
         lastBackup: data.lastBackup ? new Date(data.lastBackup).toLocaleDateString('es-ES') : prev.lastBackup,
       }));
-      toast.success('Configuración guardada exitosamente');
+      showToast('Configuración guardada exitosamente', 'success');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo guardar la configuración');
+      showToast(error instanceof Error ? error.message : 'No se pudo guardar la configuración', 'error');
     } finally {
       setSaving(false);
     }
@@ -141,9 +141,9 @@ export default function Settings() {
       a.click();
       URL.revokeObjectURL(url);
 
-      toast.success(`Respaldo creado y descargado: ${data.fileName}`);
+      showToast(`Respaldo creado y descargado: ${data.fileName}`, 'success');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo crear el respaldo');
+      showToast(error instanceof Error ? error.message : 'No se pudo crear el respaldo', 'error');
     } finally {
       setBackingUp(false);
     }
@@ -164,9 +164,9 @@ export default function Settings() {
         method: 'POST',
         body: { backup },
       });
-      toast.success(`Respaldo restaurado: ${data.usersRestored} usuario(s) importado(s)`);
+      showToast(`Respaldo restaurado: ${data.usersRestored} usuario(s) importado(s)`, 'success');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo restaurar el respaldo');
+      showToast(error instanceof Error ? error.message : 'No se pudo restaurar el respaldo', 'error');
     } finally {
       setRestoring(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -176,7 +176,7 @@ export default function Settings() {
   const handleCloseAllSessions = () => {
     closeAllSessions();
     logout();
-    toast.success('Todas las sesiones fueron cerradas');
+    showToast('Todas las sesiones fueron cerradas', 'success');
     navigate('/login', { replace: true });
 
     window.setTimeout(() => {

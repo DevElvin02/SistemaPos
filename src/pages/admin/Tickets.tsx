@@ -51,9 +51,9 @@ export default function Tickets() {
     try {
       const html = generateInvoiceHTML(getInvoiceData(order))
       downloadDocument(html, `Comprobante-${order.orderNumber}.html`)
-      toast.success(`Comprobante generado para ${order.orderNumber}`)
+      showToast(`Comprobante generado para ${order.orderNumber}`, 'success')
     } catch {
-      toast.error('No se pudo generar el comprobante')
+      showToast('No se pudo generar el comprobante', 'error')
     }
   }
 
@@ -61,18 +61,18 @@ export default function Tickets() {
     try {
       const html = generateReceiptHTML(getInvoiceData(order))
       printDocument(html)
-      toast.success(`Ticket enviado a impresion: ${order.orderNumber}`)
+      showToast(`Ticket enviado a impresion: ${order.orderNumber}`, 'success')
     } catch {
-      toast.error('No se pudo imprimir el ticket')
+      showToast('No se pudo imprimir el ticket', 'error')
     }
   }
 
   const handleDownloadPDF = async (order: Order) => {
     try {
       await generateTicketPDF(getInvoiceData(order), `Ticket-${order.orderNumber}.pdf`)
-      toast.success(`PDF generado para ${order.orderNumber}`)
+      showToast(`PDF generado para ${order.orderNumber}`, 'success')
     } catch {
-      toast.error('No se pudo generar el PDF')
+      showToast('No se pudo generar el PDF', 'error')
     }
   }
 

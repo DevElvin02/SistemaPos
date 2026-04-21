@@ -85,7 +85,7 @@ export default function Suppliers() {
 
   const openCreateModal = () => {
     if (!canCreate) {
-      toast.error('Solo un administrador puede registrar proveedores');
+      showToast('Solo un administrador puede registrar proveedores', 'error');
       return;
     }
 
@@ -98,7 +98,7 @@ export default function Suppliers() {
 
   const openEditModal = (supplier: Supplier) => {
     if (!canEdit) {
-      toast.error('Solo un administrador puede editar proveedores');
+      showToast('Solo un administrador puede editar proveedores', 'error');
       return;
     }
 
@@ -121,13 +121,13 @@ export default function Suppliers() {
   const handleAddManualProduct = () => {
     const productName = manualProductInput.trim();
     if (!productName) {
-      toast.error('Ingresa el nombre del producto a agregar');
+      showToast('Ingresa el nombre del producto a agregar', 'error');
       return;
     }
 
     const exists = formData.productsSold.some((name) => name.toLowerCase() === productName.toLowerCase());
     if (exists) {
-      toast.error('Ese producto ya fue agregado');
+      showToast('Ese producto ya fue agregado', 'error');
       return;
     }
 
@@ -151,17 +151,17 @@ export default function Suppliers() {
     const supplierPhone = isValidPhone(normalizedPhoneCandidate) ? normalizedPhoneCandidate : null;
 
     if ((formMode === 'create' && !canCreate) || (formMode === 'edit' && !canEdit)) {
-      toast.error('No tienes permisos para guardar proveedores');
+      showToast('No tienes permisos para guardar proveedores', 'error');
       return;
     }
 
     if (!formData.name.trim() || !formData.contact.trim()) {
-      toast.error('Completa nombre y contacto del proveedor');
+      showToast('Completa nombre y contacto del proveedor', 'error');
       return;
     }
 
     if (!isTextOnlyName(normalizedName)) {
-      toast.error('El nombre solo puede contener letras y espacios');
+      showToast('El nombre solo puede contener letras y espacios', 'error');
       return;
     }
 
@@ -179,7 +179,7 @@ export default function Suppliers() {
         });
 
         dispatch({ type: 'ADD_SUPPLIER', payload: mapSupplierRow(data) });
-        toast.success('Proveedor registrado exitosamente');
+        showToast('Proveedor registrado exitosamente', 'success');
       } else if (selectedSupplier) {
         const data = await apiRequest<Record<string, unknown>>(`/suppliers/${selectedSupplier.id}`, {
           method: 'PUT',
@@ -201,10 +201,10 @@ export default function Suppliers() {
         });
 
         dispatch({ type: 'UPDATE_SUPPLIER', payload: mapSupplierRow(data) });
-        toast.success('Proveedor actualizado exitosamente');
+        showToast('Proveedor actualizado exitosamente', 'success');
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo guardar el proveedor');
+      showToast(error instanceof Error ? error.message : 'No se pudo guardar el proveedor', 'error');
       return;
     }
 
@@ -213,7 +213,7 @@ export default function Suppliers() {
 
   const handleDelete = (supplier: Supplier) => {
     if (!canDelete) {
-      toast.error('Solo un administrador puede eliminar proveedores');
+      showToast('Solo un administrador puede eliminar proveedores', 'error');
       return;
     }
 
@@ -223,7 +223,7 @@ export default function Suppliers() {
 
   const handleConfirmDelete = async () => {
     if (!canDelete) {
-      toast.error('No tienes permiso para eliminar proveedores');
+      showToast('No tienes permiso para eliminar proveedores', 'error');
       return;
     }
 
@@ -231,10 +231,10 @@ export default function Suppliers() {
       try {
         await apiRequest(`/suppliers/${selectedSupplier.id}`, { method: 'DELETE' });
         dispatch({ type: 'DELETE_SUPPLIER', payload: selectedSupplier.id });
-        toast.success('Proveedor eliminado exitosamente');
+        showToast('Proveedor eliminado exitosamente', 'success');
         setIsDeleteModalOpen(false);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'No se pudo eliminar el proveedor');
+        showToast(error instanceof Error ? error.message : 'No se pudo eliminar el proveedor', 'error');
       }
     }
   };

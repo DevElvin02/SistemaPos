@@ -273,32 +273,32 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
       : 0
 
     if (!selectedProduct) {
-      toast.error('Selecciona un producto')
+      showToast('Selecciona un producto', 'error')
       return
     }
 
     if (Number.isNaN(parsedPrice) || parsedPrice <= 0) {
-      toast.error('Ingresa un precio unitario válido')
+      showToast('Ingresa un precio unitario válido', 'error')
       return
     }
 
     if (Number.isNaN(effectiveDiscountedPrice) || effectiveDiscountedPrice < 0) {
-      toast.error('Ingresa un precio con descuento válido')
+      showToast('Ingresa un precio con descuento válido', 'error')
       return
     }
 
     if (effectiveDiscountedPrice > parsedPrice) {
-      toast.error('El nuevo precio no puede ser mayor al precio original')
+      showToast('El nuevo precio no puede ser mayor al precio original', 'error')
       return
     }
 
     if (Number.isNaN(parsedQuantity) || parsedQuantity <= 0) {
-      toast.error('Ingresa una cantidad válida')
+      showToast('Ingresa una cantidad válida', 'error')
       return
     }
 
     if (Number.isNaN(calculatedDiscountPercent) || calculatedDiscountPercent < 0 || calculatedDiscountPercent > 100) {
-      toast.error('Ingresa un descuento válido entre 0 y 100')
+      showToast('Ingresa un descuento válido entre 0 y 100', 'error')
       return
     }
 
@@ -316,13 +316,13 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
   const handleBarcodeAdd = () => {
     const barcode = barcodeInput.trim().toLowerCase()
     if (!barcode) {
-      toast.error('Ingresa un codigo para escanear')
+      showToast('Ingresa un codigo para escanear', 'error')
       return
     }
 
     const found = state.products.find((p) => p.sku.toLowerCase() === barcode || (p.barcode ?? '').toLowerCase() === barcode)
     if (!found) {
-      toast.error('Producto no encontrado por codigo')
+      showToast('Producto no encontrado por codigo', 'error')
       return
     }
 
@@ -330,7 +330,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
     setBarcodeInput('')
     scannerBufferRef.current = ''
     playScanSuccessTone()
-    toast.success(`Agregado: ${found.name}`)
+    showToast(`Agregado: ${found.name}`, 'success')
   }
 
   const playScanSuccessTone = () => {
@@ -468,24 +468,24 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
     e.preventDefault()
     
     if (!customerId) {
-      toast.error('Selecciona un cliente')
+      showToast('Selecciona un cliente', 'error')
       return
     }
 
     if (lineItems.length === 0) {
-      toast.error('Agrega al menos un producto a la venta')
+      showToast('Agrega al menos un producto a la venta', 'error')
       return
     }
 
     const received = roundMoney(parseFloat(amountReceived))
     if (paymentMethod === 'cash') {
       if (Number.isNaN(received) || received <= 0) {
-        toast.error('Ingresa el monto recibido en efectivo')
+        showToast('Ingresa el monto recibido en efectivo', 'error')
         return
       }
 
       if (roundMoney(received - total) < 0) {
-        toast.error('El monto recibido no cubre el total a pagar con descuento')
+        showToast('El monto recibido no cubre el total a pagar con descuento', 'error')
         return
       }
     }
@@ -527,7 +527,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
       return
     }
 
-    toast.success('Venta creada exitosamente')
+    showToast('Venta creada exitosamente', 'success')
     if (printTicket) {
       printSaleDocument(newOrder)
     }

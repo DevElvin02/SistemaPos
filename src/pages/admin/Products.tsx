@@ -10,6 +10,7 @@ import { Product } from '@/lib/data/products';
 import { InventoryItem } from '@/lib/data/inventory';
 import { API_URL, apiRequest } from '@/lib/api';
 import { showToast, showDeleteConfirm } from '@/lib/swal';
+import Swal from 'sweetalert2';
 import { useAuth } from '@/context/AuthContext';
 import { useAdmin } from '@/context/AdminContext';
 

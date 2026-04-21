@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-var isElectronBuild = process.env.ELECTRON === 'true';
+const isElectronBuild = process.env.ELECTRON === 'true';
 export default defineConfig({
     base: isElectronBuild ? './' : '/',
     plugins: [react()],
@@ -26,7 +26,7 @@ export default defineConfig({
         // Performance: divide dependencias grandes en chunks cacheables para reducir costo inicial.
         rollupOptions: {
             output: {
-                manualChunks: function (id) {
+                manualChunks(id) {
                     if (!id.includes('node_modules'))
                         return;
                     if (id.includes('recharts'))

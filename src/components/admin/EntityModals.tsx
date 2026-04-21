@@ -24,7 +24,7 @@ export function CustomerEditModal({ customer, isOpen, onClose, onSave }: Custome
 
   const handleSave = () => {
     onSave?.({ ...customer, ...formData })
-    toast.success('Cliente actualizado exitosamente')
+    showToast('Cliente actualizado exitosamente', 'success')
     onClose()
   }
 
@@ -108,7 +108,7 @@ export function ProductEditModal({ product, isOpen, onClose, onSave }: ProductEd
 
   const handleSave = () => {
     onSave?.({ ...product, ...formData })
-    toast.success('Producto actualizado exitosamente')
+    showToast('Producto actualizado exitosamente', 'success')
     onClose()
   }
 

@@ -46,7 +46,7 @@ export default function Users() {
       const rows = await getManagedUsers();
       setUsers(rows);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo cargar usuarios');
+      showToast(error instanceof Error ? error.message : 'No se pudo cargar usuarios', 'error');
     }
   };
 
@@ -109,10 +109,10 @@ export default function Users() {
     try {
       if (selectedUser) {
         await updateManagedUser(selectedUser.id, formData);
-        toast.success('Usuario actualizado exitosamente');
+        showToast('Usuario actualizado exitosamente', 'success');
       } else {
         await createManagedUser(formData);
-        toast.success('Usuario creado exitosamente');
+        showToast('Usuario creado exitosamente', 'success');
       }
       await reloadUsers();
       setIsModalOpen(false);
@@ -122,7 +122,7 @@ export default function Users() {
       if (message.includes('email')) {
         setFormErrors({ email: message });
       } else {
-        toast.error(message);
+        showToast(message, 'error');
       }
     }
   };
@@ -132,11 +132,11 @@ export default function Users() {
 
     try {
       await deleteManagedUser(selectedUser.id);
-      toast.success('Usuario eliminado');
+      showToast('Usuario eliminado', 'success');
       await reloadUsers();
       setIsDeleteModalOpen(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo eliminar el usuario');
+      showToast(error instanceof Error ? error.message : 'No se pudo eliminar el usuario', 'error');
     }
   };
 

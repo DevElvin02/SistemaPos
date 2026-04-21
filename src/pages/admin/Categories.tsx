@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { showToast, showDeleteConfirm } from '@/lib/swal';
+import Swal from 'sweetalert2';
 import DataTable from '@/components/admin/DataTable';
 import StatusBadge from '@/components/admin/StatusBadge';
 import { GenericActionButtons } from '@/components/admin/GenericActionButtons';

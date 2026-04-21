@@ -158,7 +158,7 @@ export default function Customers() {
 
   const openCreateModal = () => {
     if (!canCreate) {
-      toast.error('No tienes permiso para registrar clientes');
+      showToast('No tienes permiso para registrar clientes', 'error');
       return;
     }
 
@@ -173,7 +173,7 @@ export default function Customers() {
 
   const handleEdit = (customer: Customer) => {
     if (!canEdit) {
-      toast.error('Solo un administrador puede editar clientes');
+      showToast('Solo un administrador puede editar clientes', 'error');
       return;
     }
 
@@ -196,27 +196,27 @@ export default function Customers() {
     );
 
     if (!formData.name.trim() || !formData.email.trim() || !formData.phone.trim() || !formData.city.trim()) {
-      toast.error('Completa nombre, email, telefono y ciudad');
+      showToast('Completa nombre, email, telefono y ciudad', 'error');
       return;
     }
 
     if (!isTextOnlyName(normalizedName)) {
-      toast.error('El nombre solo puede contener letras y espacios');
+      showToast('El nombre solo puede contener letras y espacios', 'error');
       return;
     }
 
     if (normalizedCompany && !isTextOnlyName(normalizedCompany)) {
-      toast.error('La empresa solo puede contener letras y espacios');
+      showToast('La empresa solo puede contener letras y espacios', 'error');
       return;
     }
 
     if (!isValidPhone(normalizedPhone)) {
-      toast.error('Ingresa un numero de telefono valido. Solo se permiten numeros y simbolos de telefono');
+      showToast('Ingresa un numero de telefono valido. Solo se permiten numeros y simbolos de telefono', 'error');
       return;
     }
 
     if (emailTaken) {
-      toast.error('Ya existe un cliente con ese email');
+      showToast('Ya existe un cliente con ese email', 'error');
       return;
     }
 
@@ -238,7 +238,7 @@ export default function Customers() {
         });
 
         dispatch({ type: 'ADD_CUSTOMER', payload: mapCustomerRow(data) });
-        toast.success('Cliente registrado exitosamente');
+        showToast('Cliente registrado exitosamente', 'success');
       } else if (selectedCustomer) {
         const data = await apiRequest<Record<string, unknown>>(`/customers/${selectedCustomer.id}`, {
           method: 'PUT',
@@ -256,10 +256,10 @@ export default function Customers() {
         });
 
         dispatch({ type: 'UPDATE_CUSTOMER', payload: mapCustomerRow(data) });
-        toast.success('Cliente actualizado exitosamente');
+        showToast('Cliente actualizado exitosamente', 'success');
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'No se pudo guardar el cliente');
+      showToast(error instanceof Error ? error.message : 'No se pudo guardar el cliente', 'error');
       return;
     }
 
@@ -268,7 +268,7 @@ export default function Customers() {
 
   const handleDelete = (customer: Customer) => {
     if (!canDelete) {
-      toast.error('Solo un administrador puede eliminar clientes');
+      showToast('Solo un administrador puede eliminar clientes', 'error');
       return;
     }
 
@@ -278,24 +278,24 @@ export default function Customers() {
 
   const handleConfirmDelete = async () => {
     if (!canDelete) {
-      toast.error('No tienes permiso para eliminar clientes');
+      showToast('No tienes permiso para eliminar clientes', 'error');
       return;
     }
 
     if (selectedCustomer) {
-      const hasOrders = state.orders.some((order) => order.customerId === selectedCustomer.id);
+      const hasOrders = state.orders.some((order: any) => order.customerId === selectedCustomer.id);
       if (hasOrders) {
-        toast.error('No puedes eliminar un cliente con historial de compras');
+        showToast('No puedes eliminar un cliente con historial de compras', 'error');
         return;
       }
 
       try {
         await apiRequest(`/customers/${selectedCustomer.id}`, { method: 'DELETE' });
         dispatch({ type: 'DELETE_CUSTOMER', payload: selectedCustomer.id });
-        toast.success('Cliente eliminado exitosamente');
+        showToast('Cliente eliminado exitosamente', 'success');
         setIsDeleteModalOpen(false);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'No se pudo eliminar el cliente');
+        showToast(error instanceof Error ? error.message : 'No se pudo eliminar el cliente', 'error');
       }
     }
   };
@@ -553,7 +553,7 @@ export default function Customers() {
                 </div>
                 <div className="rounded-lg border border-border p-3">
                   <p className="text-xs text-muted-foreground">Total gastado</p>
-                  <p className="text-xl font-bold">${historyOrders.reduce((acc, order) => acc + order.amount, 0).toFixed(2)}</p>
+                  <p className="text-xl font-bold">${historyOrders.reduce((acc: number, order: any) => acc + order.amount, 0).toFixed(2)}</p>
                 </div>
                 <div className="rounded-lg border border-border p-3">
                   <p className="text-xs text-muted-foreground">Segmento</p>
@@ -578,7 +578,7 @@ export default function Customers() {
                       </tr>
                     </thead>
                     <tbody>
-                      {historyOrders.map((order) => (
+                      {historyOrders.map((order: any) => (
                         <tr key={order.id} className="border-b border-border last:border-b-0">
                           <td className="px-4 py-2">{order.orderNumber}</td>
                           <td className="px-4 py-2">{new Date(order.date).toLocaleDateString('es-ES')}</td>

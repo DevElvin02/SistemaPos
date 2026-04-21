@@ -34,19 +34,19 @@ export default function Dashboard() {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate();
 
-  const validOrders = state.orders.filter((order) => !isInventoryReversalStatus(order.status));
-  const todayOrders = validOrders.filter((order) => isSameDay(new Date(order.date), now));
+  const validOrders = state.orders.filter((order: any) => !isInventoryReversalStatus(order.status));
+  const todayOrders = validOrders.filter((order: any) => isSameDay(new Date(order.date), now));
 
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
   const yesterdaySales = validOrders
-    .filter((order) => isSameDay(new Date(order.date), yesterday))
-    .reduce((sum, order) => sum + order.amount, 0);
+    .filter((order: any) => isSameDay(new Date(order.date), yesterday))
+    .reduce((sum: number, order: any) => sum + order.amount, 0);
 
-  const todaySales = todayOrders.reduce((sum, order) => sum + order.amount, 0);
+  const todaySales = todayOrders.reduce((sum: number, order: any) => sum + order.amount, 0);
   const salesTrend = yesterdaySales > 0 ? ((todaySales - yesterdaySales) / yesterdaySales) * 100 : 0;
 
-  const clientsToday = new Set(todayOrders.map((order) => order.customerId)).size;
+  const clientsToday = new Set(todayOrders.map((order: any) => order.customerId)).size;
   const lowStockCount = state.inventory.filter((item) => item.status === 'low' || item.status === 'critical' || item.quantity <= 0).length;
 
   const chartData = Array.from({ length: 7 }).map((_, i) => {
@@ -55,8 +55,8 @@ export default function Dashboard() {
     const label = day.toLocaleDateString('es-ES', { weekday: 'short' });
 
     const value = validOrders
-      .filter((order) => isSameDay(new Date(order.date), day))
-      .reduce((sum, order) => sum + order.amount, 0);
+      .filter((order: any) => isSameDay(new Date(order.date), day))
+      .reduce((sum: number, order: any) => sum + order.amount, 0);
 
     return {
       day: label.charAt(0).toUpperCase() + label.slice(1),
@@ -66,9 +66,9 @@ export default function Dashboard() {
 
   const topProductsMap = new Map<string, TopProductItem>();
   state.kardex
-    .filter((mov) => mov.type === 'salida')
-    .forEach((mov) => {
-      const unitPrice = mov.quantity > 0 ? (state.orders.find((o) => o.orderNumber === mov.reference)?.amount ?? 0) / Math.max(1, mov.quantity) : 0;
+    .filter((mov: any) => mov.type === 'salida')
+    .forEach((mov: any) => {
+      const unitPrice = mov.quantity > 0 ? (state.orders.find((o: any) => o.orderNumber === mov.reference)?.amount ?? 0) / Math.max(1, mov.quantity) : 0;
       const existing = topProductsMap.get(mov.productId);
       if (existing) {
         existing.units += mov.quantity;
@@ -84,11 +84,11 @@ export default function Dashboard() {
     });
 
   const topProducts = Array.from(topProductsMap.values())
-    .sort((a, b) => b.units - a.units)
+    .sort((a: any, b: any) => b.units - a.units)
     .slice(0, 5);
 
   const recentActivity = [
-    ...todayOrders.slice(0, 3).map((order) => ({
+    ...todayOrders.slice(0, 3).map((order: any) => ({
       id: order.id,
       icon: ShoppingCart,
       title: 'Venta completada',
@@ -99,11 +99,11 @@ export default function Dashboard() {
     })),
   ];
 
-  const activeCashSession = state.cashSessions.find((session) => session.status === 'open');
+  const activeCashSession = state.cashSessions.find((session: any) => session.status === 'open');
   const cashSales = activeCashSession
     ? activeCashSession.movements
-        .filter((mov) => mov.type === 'entrada')
-        .reduce((sum, mov) => sum + mov.amount, 0)
+        .filter((mov: any) => mov.type === 'entrada')
+        .reduce((sum: number, mov: any) => sum + mov.amount, 0)
     : 0;
 
   return (
