@@ -267,41 +267,31 @@ export default function Customers() {
   };
 
 
-  const handleDelete = async (customer: Customer) => {
+  const handleDelete = (customer: Customer) => {
     if (!canDelete) {
       showToast('Solo un administrador puede eliminar clientes', 'error');
       return;
     }
-
-    const result = await showDeleteConfirm(
-      'Eliminar Cliente',
-      `¿Está seguro de que desea eliminar al cliente "${customer.name}"? Esta acción no se puede deshacer.`,
-      'Eliminar',
-      'Cancelar'
-    );
-    if (result.isConfirmed) {
-      handleConfirmDelete(customer);
-    } else if (result.dismiss) {
-      showToast('Eliminación cancelada', 'error');
-    }
+    setSelectedCustomer(customer);
+    setIsDeleteModalOpen(true);
   };
 
-  const handleConfirmDelete = async (customer: Customer) => {
+  const handleConfirmDelete = async () => {
     if (!canDelete) {
       showToast('No tienes permiso para eliminar clientes', 'error');
       return;
     }
 
-    if (customer) {
-      const hasOrders = state.orders.some((order: any) => order.customerId === customer.id);
+    if (selectedCustomer) {
+      const hasOrders = state.orders.some((order: any) => order.customerId === selectedCustomer.id);
       if (hasOrders) {
         showToast('No puedes eliminar un cliente con historial de compras', 'error');
         return;
       }
 
       try {
-        await apiRequest(`/customers/${customer.id}`, { method: 'DELETE' });
-        dispatch({ type: 'DELETE_CUSTOMER', payload: customer.id });
+        await apiRequest(`/customers/${selectedCustomer.id}`, { method: 'DELETE' });
+        dispatch({ type: 'DELETE_CUSTOMER', payload: selectedCustomer.id });
         showToast('Cliente eliminado exitosamente', 'success');
         setIsDeleteModalOpen(false);
       } catch (error) {
