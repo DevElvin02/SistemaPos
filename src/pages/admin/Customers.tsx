@@ -8,7 +8,7 @@ import { DeleteConfirmModal } from '@/components/admin/EntityModals';
 import { Customer, CustomerType } from '@/lib/data/customers';
 import { isInventoryReversalStatus } from '@/lib/data/orders';
 import { isTextOnlyName, isValidPhone, normalizeNameText, normalizePhone, sanitizeNameText, sanitizePhone } from '@/lib/validators';
-import { showToast } from '@/lib/swal';
+import { showToast, showDeleteConfirm } from '@/lib/swal';
 import { useAdmin } from '@/context/AdminContext';
 import { useAuth } from '@/context/AuthContext';
 import { apiRequest } from '@/lib/api';
@@ -266,32 +266,42 @@ export default function Customers() {
     setIsFormModalOpen(false);
   };
 
-  const handleDelete = (customer: Customer) => {
+
+  const handleDelete = async (customer: Customer) => {
     if (!canDelete) {
       showToast('Solo un administrador puede eliminar clientes', 'error');
       return;
     }
 
-    setSelectedCustomer(customer);
-    setIsDeleteModalOpen(true);
+    const result = await showDeleteConfirm(
+      'Eliminar Cliente',
+      `¿Está seguro de que desea eliminar al cliente "${customer.name}"? Esta acción no se puede deshacer.`,
+      'Eliminar',
+      'Cancelar'
+    );
+    if (result.isConfirmed) {
+      handleConfirmDelete(customer);
+    } else if (result.dismiss) {
+      showToast('Eliminación cancelada', 'error');
+    }
   };
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = async (customer: Customer) => {
     if (!canDelete) {
       showToast('No tienes permiso para eliminar clientes', 'error');
       return;
     }
 
-    if (selectedCustomer) {
-      const hasOrders = state.orders.some((order: any) => order.customerId === selectedCustomer.id);
+    if (customer) {
+      const hasOrders = state.orders.some((order: any) => order.customerId === customer.id);
       if (hasOrders) {
         showToast('No puedes eliminar un cliente con historial de compras', 'error');
         return;
       }
 
       try {
-        await apiRequest(`/customers/${selectedCustomer.id}`, { method: 'DELETE' });
-        dispatch({ type: 'DELETE_CUSTOMER', payload: selectedCustomer.id });
+        await apiRequest(`/customers/${customer.id}`, { method: 'DELETE' });
+        dispatch({ type: 'DELETE_CUSTOMER', payload: customer.id });
         showToast('Cliente eliminado exitosamente', 'success');
         setIsDeleteModalOpen(false);
       } catch (error) {
