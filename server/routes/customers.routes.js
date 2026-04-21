@@ -54,6 +54,15 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'El numero de telefono no es valido' });
     }
 
+    // Validación de duplicados por nombre, email o teléfono
+    const [existing] = await dbPool.query(
+      `SELECT id FROM customers WHERE LOWER(name) = ? OR LOWER(email) = ? OR phone = ? LIMIT 1`,
+      [normalizedName.toLowerCase(), email.toLowerCase(), normalizedPhone]
+    );
+    if (existing.length > 0) {
+      return res.status(400).json({ ok: false, error: 'Ya existe un cliente con el mismo nombre, correo o teléfono.' });
+    }
+
     const normalizedCustomerType = normalizeCustomerType(customerType);
 
     const [result] = await dbPool.query(
