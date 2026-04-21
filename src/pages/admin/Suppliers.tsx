@@ -6,10 +6,11 @@ import { GenericActionButtons } from '@/components/admin/GenericActionButtons';
 import { DeleteConfirmModal } from '@/components/admin/EntityModals';
 import { Supplier } from '@/lib/data/suppliers';
 import { isTextOnlyName, isValidPhone, normalizeNameText, normalizePhone, sanitizeNameText, sanitizePhone } from '@/lib/validators';
-import { showToast } from '@/lib/swal';
+import { showToast, showConfirm, showDeleteConfirm } from '@/lib/swal';
 import { useAdmin } from '@/context/AdminContext';
 import { useAuth } from '@/context/AuthContext';
 import { apiRequest } from '@/lib/api';
+
 
 type SupplierModalMode = 'create' | 'edit';
 
@@ -212,14 +213,25 @@ export default function Suppliers() {
   };
 
   const handleDelete = (supplier: Supplier) => {
-    if (!canDelete) {
-      showToast('Solo un administrador puede eliminar proveedores', 'error');
-      return;
-    }
+  if (!canDelete) {
+    showToast('Solo un administrador puede eliminar proveedores', 'error');
+    return;
+  }
 
-    setSelectedSupplier(supplier);
-    setIsDeleteModalOpen(true);
-  };
+  setSelectedSupplier(supplier);
+  showDeleteConfirm(
+    '¿Estás seguro?',
+    `¿Desea eliminar al proveedor "${supplier.name}"? Esta acción no se puede deshacer.`,
+    'Sí, eliminar',
+    'No, cancelar'
+  ).then((result) => {
+    if (result.isConfirmed) {
+      handleConfirmDelete();
+    } else if (result.dismiss === 'cancel') {
+      showToast('Eliminación cancelada', 'error');
+    }
+  });
+};
 
   const handleConfirmDelete = async () => {
     if (!canDelete) {

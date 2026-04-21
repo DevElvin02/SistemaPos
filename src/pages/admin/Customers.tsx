@@ -13,6 +13,7 @@ import { useAdmin } from '@/context/AdminContext';
 import { useAuth } from '@/context/AuthContext';
 import { apiRequest } from '@/lib/api';
 
+
 interface CustomerFormData {
   name: string;
   email: string;
@@ -273,7 +274,18 @@ export default function Customers() {
       return;
     }
     setSelectedCustomer(customer);
-    setIsDeleteModalOpen(true);
+    showDeleteConfirm(
+      '¿Estás seguro?',
+      `¿Desea eliminar al cliente "${customer.name}"? Esta acción no se puede deshacer.`,
+      'Sí, eliminar',
+      'No, cancelar'
+    ).then((result) => {
+      if (result.isConfirmed) {
+        handleConfirmDelete();
+      } else if (result.dismiss === 'cancel') {
+        showToast('Eliminación cancelada', 'error');
+      }
+    });
   };
 
   const handleConfirmDelete = async () => {
@@ -293,6 +305,7 @@ export default function Customers() {
         await apiRequest(`/customers/${selectedCustomer.id}`, { method: 'DELETE' });
         dispatch({ type: 'DELETE_CUSTOMER', payload: selectedCustomer.id });
         showToast('Cliente eliminado exitosamente', 'success');
+        setSelectedCustomer(null);
         setIsDeleteModalOpen(false);
       } catch (error) {
         showToast(error instanceof Error ? error.message : 'No se pudo eliminar el cliente', 'error');
