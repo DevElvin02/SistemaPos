@@ -363,6 +363,7 @@ export default function Orders() {
         date: new Date(newOrder.date),
       };
 
+      // Registrar movimiento de inventario
       for (const line of saleLines) {
         dispatch({
           type: 'REGISTER_INVENTORY_MOVEMENT',
@@ -375,6 +376,9 @@ export default function Orders() {
           },
         });
       }
+
+      // Registrar la orden en el contexto para caja
+      dispatch({ type: 'ADD_ORDER', payload: orderWithDefaults });
 
       await loadOrders('after-create');
       return true;
