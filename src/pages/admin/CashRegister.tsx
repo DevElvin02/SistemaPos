@@ -164,7 +164,7 @@ export default function CashRegister() {
 
       // Recargar historial de cajas
       await apiRequest('/cash/sessions').then((sessions) => {
-        dispatch({ type: 'SET_CASH_SESSIONS', payload: sessions.map((row: any) => ({
+        dispatch({ type: 'SET_CASH_SESSIONS', payload: (sessions as any[]).map((row: any) => ({
           id: String(row.id),
           sessionNumber: String(row.session_number ?? ''),
           openedBy: String(row.opened_by ?? ''),
@@ -429,7 +429,7 @@ export default function CashRegister() {
                           {session.status === 'closed'
                             ? (() => {
                                 let diff = session.differenceAmount;
-                                if (diff === null || diff === undefined || diff === '') return '0.00';
+                                if (diff === null || diff === undefined) return '0.00';
                                 diff = Number(diff);
                                 if (isNaN(diff)) return '0.00';
                                 return (diff > 0 ? '+' : (diff < 0 ? '' : '')) + `$${diff.toFixed(2)}`;
