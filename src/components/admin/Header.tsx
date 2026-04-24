@@ -302,7 +302,7 @@ export default function Header() {
               <div className="px-4 py-6 text-sm text-muted-foreground">
                 No hay notificaciones activas por ahora.
               </div>
-            ) : notifications.map((item) => (
+            ) : notifications.filter((item) => item.unread).map((item) => (
               <button
                 key={item.id}
                 onClick={() => handleNotificationClick(item.id, item.href)}

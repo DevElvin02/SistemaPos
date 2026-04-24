@@ -224,6 +224,9 @@ export default function AdminDataBootstrap() {
         movements: cashMovementsBySession.get(String(row.id)) ?? [],
         notes: row.notes ? String(row.notes) : undefined,
         status: (row.status as CashSession['status']) ?? 'closed',
+        expectedAmount: row.expected_amount !== undefined ? Number(row.expected_amount) : undefined,
+        countedAmount: row.counted_amount !== undefined ? Number(row.counted_amount) : undefined,
+        differenceAmount: row.difference_amount !== undefined ? Number(row.difference_amount) : undefined,
       }));
 
       dispatch({ type: 'SET_PRODUCTS', payload: products.map(mapProduct) });

@@ -161,6 +161,25 @@ export default function CashRegister() {
           notes: closeForm.notes,
         },
       });
+
+      // Recargar historial de cajas
+      await apiRequest('/cash/sessions').then((sessions) => {
+        dispatch({ type: 'SET_CASH_SESSIONS', payload: sessions.map((row: any) => ({
+          id: String(row.id),
+          sessionNumber: String(row.session_number ?? ''),
+          openedBy: String(row.opened_by ?? ''),
+          closedBy: row.closed_by ? String(row.closed_by) : undefined,
+          openingAmount: Number(row.opening_amount ?? 0),
+          openedAt: row.opened_at ? new Date(String(row.opened_at)) : new Date(),
+          closedAt: row.closed_at ? new Date(String(row.closed_at)) : undefined,
+          movements: [],
+          notes: row.notes ? String(row.notes) : undefined,
+          status: (row.status as any) ?? 'closed',
+          expectedAmount: row.expected_amount !== undefined ? Number(row.expected_amount) : undefined,
+          countedAmount: row.counted_amount !== undefined ? Number(row.counted_amount) : undefined,
+          differenceAmount: row.difference_amount !== undefined ? Number(row.difference_amount) : undefined,
+        })) });
+      });
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'No se pudo cerrar la caja', 'error');
       return;
@@ -368,6 +387,7 @@ export default function CashRegister() {
                   <th className="text-right py-2 px-4 font-semibold">Inicial</th>
                   <th className="text-right py-2 px-4 font-semibold">Ventas</th>
                   <th className="text-right py-2 px-4 font-semibold">Gastos</th>
+                                  <th className="text-right py-2 px-4 font-semibold">Diferencia</th>
                 </tr>
               </thead>
               <tbody>
@@ -380,6 +400,8 @@ export default function CashRegister() {
                 ) : (
                   recentSessions.map((session) => {
                     const totals = calculateSessionTotals(session);
+                    // Log temporal para depuración
+                    console.log('Diferencia recibida:', session.differenceAmount, session);
                     return (
                       <tr
                         key={session.id}
@@ -403,6 +425,17 @@ export default function CashRegister() {
                         <td className="py-3 px-4 text-right">${session.openingAmount.toFixed(2)}</td>
                         <td className="py-3 px-4 text-right text-green-600">+${totals.totalSales.toFixed(2)}</td>
                         <td className="py-3 px-4 text-right text-red-600">-${totals.totalExpenses.toFixed(2)}</td>
+                        <td className={`py-3 px-4 text-right font-semibold ${session.differenceAmount && session.differenceAmount !== 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                          {session.status === 'closed'
+                            ? (() => {
+                                let diff = session.differenceAmount;
+                                if (diff === null || diff === undefined || diff === '') return '0.00';
+                                diff = Number(diff);
+                                if (isNaN(diff)) return '0.00';
+                                return (diff > 0 ? '+' : (diff < 0 ? '' : '')) + `$${diff.toFixed(2)}`;
+                              })()
+                            : '-'}
+                        </td>
                       </tr>
                     );
                   })

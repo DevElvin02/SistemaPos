@@ -23,6 +23,9 @@ export interface CashSession {
   movements: CashMovement[];
   notes?: string;
   status: 'open' | 'closed';
+  expectedAmount?: number; // Esperado en caja al cierre
+  countedAmount?: number; // Dinero contado al cierre
+  differenceAmount?: number; // Diferencia al cierre
 }
 
 // Helper to calculate session totals
