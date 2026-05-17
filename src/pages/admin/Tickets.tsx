@@ -4,9 +4,8 @@ import { showToast } from '@/lib/swal';
 import { useAdmin } from '@/context/AdminContext'
 import {
   generateInvoiceHTML,
-  generateReceiptHTML,
   downloadDocument,
-  printDocument,
+  printPlainTextReceipt,
   generateTicketPDF,
 } from '@/lib/utils/invoice-generator'
 import { useCompanySettings } from '@/hooks/use-company-settings'
@@ -59,8 +58,7 @@ export default function Tickets() {
 
   const handlePrintTicket = (order: Order) => {
     try {
-      const html = generateReceiptHTML(getInvoiceData(order))
-      printDocument(html)
+      printPlainTextReceipt(getInvoiceData(order))
       showToast(`Ticket enviado a impresion: ${order.orderNumber}`, 'success')
     } catch {
       showToast('No se pudo imprimir el ticket', 'error')

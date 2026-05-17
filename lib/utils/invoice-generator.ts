@@ -430,3 +430,163 @@ export const downloadDocument = (html: string, filename: string) => {
   document.body.removeChild(element)
   URL.revokeObjectURL(element.href)
 }
+
+// Ancho de papel térmico en mm: cambia a 58 si usas rollo de 58mm
+const THERMAL_PAPER_WIDTH_MM = 57
+
+export const generateThermalReceiptHTML = (invoiceData: InvoiceData): string => {
+  const { order, customerName, companyName, companyAddress } = invoiceData
+
+  const taxRate = 0.0
+  const subtotal = order.amount / (1 + taxRate)
+  const taxAmount = order.amount - subtotal
+  const totalAmount = order.amount
+
+  const dateStr = new Date(order.date).toLocaleDateString('es-ES')
+  const timeStr = new Date(order.date).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+  const receiptNo = String(order.id).padStart(6, '0')
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Ticket #${receiptNo}</title>
+  <style>
+    @page {
+      size: ${THERMAL_PAPER_WIDTH_MM}mm auto;
+      margin: 2mm 3mm;
+    }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11px;
+      color: #000;
+      background: #fff;
+      width: ${THERMAL_PAPER_WIDTH_MM - 6}mm;
+    }
+    .center { text-align: center; }
+    .right  { text-align: right; }
+    .bold   { font-weight: bold; }
+    .large  { font-size: 14px; }
+    .small  { font-size: 9px; }
+    .dash   { border-top: 1px dashed #000; margin: 4px 0; }
+    .solid  { border-top: 1px solid #000; margin: 4px 0; }
+    .row {
+      display: flex;
+      justify-content: space-between;
+    }
+    .row .label { flex: 1; }
+    .row .value { text-align: right; white-space: nowrap; }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: bold;
+      margin-top: 4px;
+    }
+    .header { text-align: center; margin-bottom: 6px; }
+    .header h1 { font-size: 15px; font-weight: bold; letter-spacing: 1px; }
+    .header p  { font-size: 9px; margin: 1px 0; }
+    .section   { margin: 4px 0; }
+    .footer    { text-align: center; font-size: 9px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>${companyName || 'MOTO REPUESTOS'}</h1>
+    <p>${companyAddress || 'Calle Principal 123, Ciudad'}</p>
+    <p>NIT: 123456789-0</p>
+  </div>
+
+  <div class="dash"></div>
+
+  <div class="section">
+    <div class="row">
+      <span class="label">TICKET:</span>
+      <span class="value bold">#${receiptNo}</span>
+    </div>
+    <div class="row">
+      <span class="label">FECHA:</span>
+      <span class="value">${dateStr} ${timeStr}</span>
+    </div>
+    <div class="row">
+      <span class="label">CLIENTE:</span>
+      <span class="value">${customerName}</span>
+    </div>
+    <div class="row">
+      <span class="label">ESTADO:</span>
+      <span class="value">${order.status.toUpperCase()}</span>
+    </div>
+  </div>
+
+  <div class="dash"></div>
+
+  <div class="section">
+    <div class="row bold small">
+      <span class="label">DESCRIPCIÓN</span>
+      <span class="value">TOTAL</span>
+    </div>
+    <div class="dash"></div>
+    <div class="row">
+      <span class="label">Venta de Productos</span>
+      <span class="value">$${subtotal.toFixed(2)}</span>
+    </div>
+    <div class="row small" style="color:#555;">
+      <span class="label">(${order.items} artículo${order.items !== 1 ? 's' : ''})</span>
+      <span class="value"></span>
+    </div>
+  </div>
+
+  <div class="dash"></div>
+
+  <div class="section">
+    <div class="row">
+      <span class="label">Subtotal:</span>
+      <span class="value">$${subtotal.toFixed(2)}</span>
+    </div>
+    <div class="row">
+      <span class="label">IVA (0%):</span>
+      <span class="value">$${taxAmount.toFixed(2)}</span>
+    </div>
+  </div>
+
+  <div class="solid"></div>
+
+  <div class="total-row">
+    <span>TOTAL:</span>
+    <span>$${totalAmount.toFixed(2)}</span>
+  </div>
+
+  <div class="dash"></div>
+
+  <div class="footer">
+    <p>*** GRACIAS POR SU COMPRA ***</p>
+    <p style="margin-top:3px;">www.motorepuestos.com</p>
+  </div>
+
+</body>
+</html>`
+}
+
+export const printThermalReceipt = (invoiceData: InvoiceData): void => {
+  const html = generateThermalReceiptHTML(invoiceData)
+  const printWindow = window.open('', '_blank', 'width=400,height=600')
+  if (!printWindow) {
+    alert('Permite las ventanas emergentes para imprimir el ticket.')
+    return
+  }
+  printWindow.document.open()
+  printWindow.document.write(html)
+  printWindow.document.close()
+  printWindow.onload = () => {
+    printWindow.focus()
+    printWindow.print()
+    // Cierra la ventana después de que el diálogo de impresión se resuelva
+    printWindow.onafterprint = () => printWindow.close()
+  }
+}

@@ -8,9 +8,8 @@ import { CreateOrderModal } from '@/components/admin/CreateOrderModal';
 import { Order, canCancelOrder, canRefundOrder, canReturnOrder, getOrderStatusLabel, isInventoryReversalStatus, normalizeOrderStatus, parseOrderLines } from '@/lib/data/orders';
 import {
   generateInvoiceHTML,
-  generateReceiptHTML,
   downloadDocument,
-  printDocument,
+  printPlainTextReceipt,
   generateTicketPDF,
 } from '@/lib/utils/invoice-generator';
 import { showToast } from '@/lib/swal';
@@ -224,8 +223,7 @@ export default function Orders() {
         console.warn('[Orders] Ticket sin detalle enriquecido', error);
       }
 
-      const receiptHTML = generateReceiptHTML(getInvoiceData(detailedOrder));
-      printDocument(receiptHTML);
+      printPlainTextReceipt(getInvoiceData(detailedOrder));
       showToast(`Ticket enviado a impresion: ${order.orderNumber}`, 'success');
     } catch {
       showToast('No se pudo imprimir el ticket', 'error');

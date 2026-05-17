@@ -765,6 +765,188 @@ export const printDocument = (html: string) => {
   })
 }
 
+// ─── Recibo en TEXTO PLANO (impresora térmica) ────────────────────────────────
+/** Ancho de línea en caracteres: 24 ≈ zona imprimible real en rollo 57 mm con padding interno de 4 mm. Cambia a 40 para rollo de 80 mm. */
+const TXT_W = 24
+
+function txtCenter(text: string, w = TXT_W): string {
+  // Si el texto cabe, centrarlo con espacios
+  if (text.length <= w) {
+    const pad = w - text.length
+    return ' '.repeat(Math.floor(pad / 2)) + text
+  }
+  // Si no cabe, partir en palabras; si una palabra sola no cabe, corte duro
+  const lines: string[] = []
+  const words = text.split(' ')
+  let cur = ''
+  for (const word of words) {
+    const candidate = cur ? `${cur} ${word}` : word
+    if (candidate.length <= w) {
+      cur = candidate
+    } else {
+      if (cur) { lines.push(cur); cur = '' }
+      let rem = word
+      while (rem.length > w) { lines.push(rem.slice(0, w)); rem = rem.slice(w) }
+      cur = rem
+    }
+  }
+  if (cur) lines.push(cur)
+  return lines.map(l => txtCenter(l, w)).join('\n')
+}
+
+function txtRow(label: string, value: string, w = TXT_W): string {
+  const spaces = w - label.length - value.length
+  return label + ' '.repeat(Math.max(1, spaces)) + value
+}
+
+/** Genera líneas de un artículo en formato 2 líneas: nombre arriba, precio abajo a la derecha. */
+function txtItemLines(qty: number, desc: string, pu: string, total: string, w = TXT_W): string[] {
+  const COL_QTY = 3
+  const COL_PU  = 6
+  const COL_TOT = 7
+  const PFX     = w - COL_PU - 1 - COL_TOT   // espacios antes del precio
+  const maxDesc = w - COL_QTY - 1             // chars disponibles para descripción
+  const result: string[] = []
+  const chunks: string[] = []
+  let rem = desc
+  while (rem.length > 0) { chunks.push(rem.slice(0, maxDesc)); rem = rem.slice(maxDesc) }
+  // Línea 1: cantidad + descripción
+  result.push(`${String(qty).padStart(COL_QTY)} ${chunks[0] ?? ''}`)
+  for (let i = 1; i < chunks.length; i++) result.push(`${' '.repeat(COL_QTY + 1)}${chunks[i]}`)
+  // Línea 2: precio unitario y total alineados a la derecha
+  result.push(`${' '.repeat(PFX)}${pu.padStart(COL_PU)} ${total.padStart(COL_TOT)}`)
+  return result
+}
+
+export const generatePlainTextReceipt = (invoiceData: InvoiceData): string => {
+  const { order, customerName, cashierName, companyName, companyAddress, companyEmail, companyPhone, companyCountry } = invoiceData
+  const { lines, grossSubtotal, subtotal, discountAmount, taxAmount, totalAmount, totalItems, hasTax, hasDiscount } = getOrderTotals(order)
+  const { received, change, showPaymentBreakdown } = getOrderPayment(order)
+  const statusText = getOrderStatusLabel(order.status)
+  const sep     = '-'.repeat(TXT_W)
+  const dateStr = new Date(order.date).toLocaleDateString('es-ES')
+  const timeStr = new Date(order.date).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+  const out: string[] = []
+
+  // ── Encabezado ──────────────────────────────────────────────────────────────
+  out.push(txtCenter(companyName))
+  out.push(txtCenter('Sistema de Ventas'))
+  if (companyAddress) companyAddress.split('\n').forEach(l => out.push(txtCenter(l.trim())))
+  if (companyCountry) out.push(txtCenter(companyCountry))
+  if (companyPhone)   out.push(txtCenter(`Tel: ${companyPhone}`))
+  if (companyEmail)   out.push(txtCenter(companyEmail))
+  out.push(txtCenter('NIT: 123456789-0'))
+  out.push(sep)
+
+  // ── Info del recibo ──────────────────────────────────────────────────────────
+  out.push(`RECIBO #${order.id}`)
+  out.push(`${dateStr} ${timeStr}`)
+  out.push(sep)
+
+  // ── Cliente / cajero ────────────────────────────────────────────────────────
+  out.push(`Cliente: ${customerName}`)
+  out.push(`Cajero:  ${cashierName || order.cashierName || 'Cajero no disponible'}`)
+  out.push(`Estado:  ${statusText}`)
+  out.push(`Items:   ${totalItems}`)
+  out.push(sep)
+
+  // ── Cabecera de artículos (2 líneas, igual que las filas de artículos) ────────
+  const COL_QTY = 3
+  const COL_PU  = 6
+  const COL_TOT = 7
+  const PFX     = TXT_W - COL_PU - 1 - COL_TOT
+  out.push(`${'#'.padStart(COL_QTY)} DESCRIPCION`)
+  out.push(`${'P/U'.padStart(PFX + COL_PU)} ${'IMPORTE'.padStart(COL_TOT)}`)
+  out.push(sep)
+
+  // ── Artículos ────────────────────────────────────────────────────────────────
+  if (lines.length > 0) {
+    for (const line of lines) {
+      const desc  = String(line.productName || 'Producto')
+      const pu    = formatCurrency(line.unitPrice ?? 0)
+      const total = formatCurrency(line.lineTotal ?? 0)
+      txtItemLines(line.quantity, desc, pu, total).forEach(l => out.push(l))
+    }
+  } else {
+    out.push(txtCenter('(sin detalle de articulos)'))
+  }
+  out.push(sep)
+
+  // ── Totales ──────────────────────────────────────────────────────────────────
+  out.push(txtRow('Subtotal:', formatCurrency(grossSubtotal)))
+  if (hasDiscount) {
+    out.push(txtRow('Descuento:', `-${formatCurrency(discountAmount)}`))
+    out.push(txtRow('Subtotal desc.:', formatCurrency(subtotal)))
+  }
+  if (hasTax) {
+    out.push(txtRow('IVA:', formatCurrency(taxAmount)))
+  }
+  out.push(sep)
+  out.push(txtRow('TOTAL:', formatCurrency(totalAmount)))
+  if (showPaymentBreakdown) {
+    out.push(txtRow('Recibido:', formatCurrency(received)))
+    out.push(txtRow('Vuelto:', formatCurrency(change)))
+  }
+
+  out.push(sep)
+  out.push(txtCenter('Gracias por su compra'))
+  out.push(txtCenter(companyName))
+  out.push(sep)
+  return out.join('\n')
+}
+
+export const printPlainTextReceipt = (invoiceData: InvoiceData, onAfterPrint?: () => void): void => {
+  const text = generatePlainTextReceipt(invoiceData)
+  const popup = window.open('', '_blank', 'width=260,height=700')
+  if (!popup) {
+    throw new Error('Permite las ventanas emergentes para imprimir el ticket.')
+  }
+  const safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  popup.document.write(`<!DOCTYPE html><html>
+<head>
+  <meta charset="UTF-8">
+  <title>Ticket</title>
+  <style>
+    @page {
+      size: 57mm auto;
+      margin: 1mm 3.5mm;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html {
+      width: 100%;
+      background: #fff;
+    }
+    html, body {
+      margin: 0;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 9pt;
+      color: #000;
+    }
+    body {
+      width: 50mm;
+      margin: 0 auto;
+      background: #fff;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      width: 50mm;
+      padding: 1mm 0 1mm 4mm;
+    }
+  </style>
+</head>
+<body><pre>${safeText}</pre></body>
+</html>`)
+  popup.document.close()
+  popup.onload = () => {
+    setTimeout(() => {
+      popup.focus()
+      popup.print()
+      popup.onafterprint = () => { popup.close(); onAfterPrint?.() }
+    }, 250)
+  }
+}
+
 export const generateTicketPDF = async (invoiceData: InvoiceData, filename: string) => {
   // Performance: carga jspdf bajo demanda para no penalizar la carga inicial de la ruta de ventas.
   const { jsPDF } = await import('jspdf')

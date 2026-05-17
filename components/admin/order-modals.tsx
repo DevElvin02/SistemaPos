@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Order } from '@/lib/data/orders'
 import { customers } from '@/lib/data/customers'
-import { generateInvoiceHTML, generateReceiptHTML, downloadDocument } from '@/lib/utils/invoice-generator'
+import { generateInvoiceHTML, downloadDocument, printThermalReceipt } from '@/lib/utils/invoice-generator'
 import { showToast } from '@/lib/swal';
 
 interface OrderModalsProps {
@@ -49,7 +49,7 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder }: Orde
   const handleGenerateReceipt = () => {
     setIsReceiptGenerating(true)
     try {
-      const receiptHTML = generateReceiptHTML({
+      printThermalReceipt({
         order,
         customerName,
         customerEmail,
@@ -57,10 +57,9 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder }: Orde
         companyAddress: 'Calle Principal 123, Ciudad',
         invoiceDate: new Date().toLocaleDateString('es-ES'),
       })
-      downloadDocument(receiptHTML, `Recibo-${order.id}.html`)
-      showToast('Recibo generado y descargado exitosamente', 'success')
+      showToast('Ticket enviado a imprimir', 'success')
     } catch (error) {
-      showToast('Error al generar el recibo', 'error')
+      showToast('Error al imprimir el ticket', 'error')
       console.error(error)
     } finally {
       setIsReceiptGenerating(false)

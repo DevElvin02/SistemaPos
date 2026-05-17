@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Order, canCancelOrder, canRefundOrder, canReturnOrder, getOrderStatusLabel, isInventoryReversalStatus } from '@/lib/data/orders'
 import { useAdmin } from '@/context/AdminContext'
-import { generateInvoiceHTML, generateReceiptHTML, downloadDocument, generateTicketPDF } from '@/lib/utils/invoice-generator'
+import { generateInvoiceHTML, downloadDocument, generateTicketPDF, printPlainTextReceipt } from '@/lib/utils/invoice-generator'
 import { showToast } from '@/lib/swal';
 import { useCompanySettings } from '@/hooks/use-company-settings'
 
@@ -62,7 +62,7 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder, onRetu
   const handleGenerateReceipt = () => {
     setIsReceiptGenerating(true)
     try {
-      const receiptHTML = generateReceiptHTML({
+      printPlainTextReceipt({
         order,
         customerName,
         customerEmail,
@@ -73,11 +73,10 @@ export function OrderDetailModal({ order, isOpen, onClose, onCancelOrder, onRetu
         companyPhone: companySettings.phone,
         companyCountry: companySettings.country,
         invoiceDate: new Date().toLocaleDateString('es-ES'),
-      })
-      downloadDocument(receiptHTML, `Recibo-${order.id}.html`)
-      showToast('Recibo generado y descargado exitosamente', 'success')
+      }, onClose)
+      showToast('Ticket enviado a imprimir', 'success')
     } catch (error) {
-      showToast('Error al generar el recibo', 'error')
+      showToast('Error al imprimir el ticket', 'error')
       console.error(error)
     } finally {
       setIsReceiptGenerating(false)

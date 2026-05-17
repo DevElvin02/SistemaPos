@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { showToast } from '@/lib/swal';
 import { useAdmin } from '@/context/AdminContext'
 import { useCompanySettings } from '@/hooks/use-company-settings'
-import { generateInvoiceHTML, generateReceiptHTML, printDocument } from '@/lib/utils/invoice-generator'
+import { generateInvoiceHTML, printDocument, printPlainTextReceipt } from '@/lib/utils/invoice-generator'
 import type { Order } from '@/lib/data/orders'
 import { useAuth } from '@/context/AuthContext'
 import { sanitizeDecimalInput, sanitizeIntegerInput } from '@/lib/validators'
@@ -403,11 +403,11 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
       invoiceDate: new Date().toLocaleDateString('es-ES'),
     }
 
-    const html = order.documentType === 'invoice'
-      ? generateInvoiceHTML(invoiceData)
-      : generateReceiptHTML(invoiceData)
-
-    printDocument(html)
+    if (order.documentType === 'invoice') {
+      printDocument(generateInvoiceHTML(invoiceData))
+    } else {
+      printPlainTextReceipt(invoiceData)
+    }
   }
 
   useEffect(() => {
