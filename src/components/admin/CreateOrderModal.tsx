@@ -25,15 +25,13 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
   const { state } = useAdmin()
   const { companySettings } = useCompanySettings()
   const { user } = useAuth()
-  const barcodeInputRef = useRef<HTMLInputElement | null>(null)
   const scannerBufferRef = useRef('')
   const scannerResetTimerRef = useRef<number | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const [customerId, setCustomerId] = useState('')
   const [customerSearchTerm, setCustomerSearchTerm] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
-  const [barcodeInput, setBarcodeInput] = useState('')
-  const [isScannerMode, setIsScannerMode] = useState(false)
+
   const [selectedProductId, setSelectedProductId] = useState('')
   const [unitPrice, setUnitPrice] = useState('')
   const [discountedUnitPrice, setDiscountedUnitPrice] = useState('')
@@ -115,7 +113,6 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
     setCustomerId('')
     setCustomerSearchTerm('')
     setSearchTerm('')
-    setBarcodeInput('')
     scannerBufferRef.current = ''
     setSelectedProductId('')
     setUnitPrice('')
@@ -126,7 +123,6 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
     setDocumentType('ticket')
     setAmountReceived('')
     setPrintTicket(true)
-    setIsScannerMode(false)
     setIsCustomerSuggestionsOpen(false)
     setIsProductSuggestionsOpen(false)
     setLineItems([])
@@ -313,22 +309,17 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
     setIsProductSuggestionsOpen(false)
   }
 
-  const handleBarcodeAdd = () => {
-    const barcode = barcodeInput.trim().toLowerCase()
-    if (!barcode) {
-      showToast('Ingresa un codigo para escanear', 'error')
-      return
-    }
+  const handleBarcodeAdd = (code: string) => {
+    const barcode = code.trim().toLowerCase()
+    if (!barcode) return
 
     const found = state.products.find((p) => p.sku.toLowerCase() === barcode || (p.barcode ?? '').toLowerCase() === barcode)
     if (!found) {
-      showToast('Producto no encontrado por codigo', 'error')
+      showToast('Producto no encontrado', 'error')
       return
     }
 
     addLineItem(found.id, found.name, found.sku, found.price, 1, 0)
-    setBarcodeInput('')
-    scannerBufferRef.current = ''
     playScanSuccessTone()
     showToast(`Agregado: ${found.name}`, 'success')
   }
@@ -360,26 +351,11 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
     oscillator.stop(startAt + 0.12)
   }
 
-  const armUsbScanner = () => {
-    setIsScannerMode(true)
-    setBarcodeInput('')
-    scannerBufferRef.current = ''
-    window.setTimeout(() => {
-      barcodeInputRef.current?.focus()
-      barcodeInputRef.current?.select()
-    }, 0)
-  }
-
   const commitScannerBuffer = () => {
     const capturedValue = scannerBufferRef.current.trim()
+    scannerBufferRef.current = ''
     if (!capturedValue) return
-
-    setBarcodeInput(capturedValue)
-    scannerBufferRef.current = capturedValue
-
-    window.setTimeout(() => {
-      handleBarcodeAdd()
-    }, 0)
+    handleBarcodeAdd(capturedValue)
   }
 
   const handleRemoveLine = (lineId: string) => {
@@ -393,7 +369,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
     const invoiceData = {
       order,
       customerName: order.customerName,
-      customerEmail: customer?.email || 'cliente@motorepuestos.com',
+      customerEmail: customer?.email || '',
       cashierName: order.cashierName || user?.name || 'Cajero no disponible',
       companyName: companySettings.companyName,
       companyAddress: companySettings.address,
@@ -417,22 +393,20 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
       if (event.altKey && event.key.toLowerCase() === 'a') {
         event.preventDefault()
         handleAddProduct()
+        return
       }
 
       if (event.ctrlKey && event.key === 'Enter') {
         event.preventDefault()
         const form = document.getElementById('pos-sale-form') as HTMLFormElement | null
         form?.requestSubmit()
-      }
-
-      if (!isScannerMode) return
-
-      if (event.key === 'Escape') {
-        setIsScannerMode(false)
-        setBarcodeInput('')
-        scannerBufferRef.current = ''
         return
       }
+
+      // Si el foco está en un campo de texto (búsqueda, precio, etc.), no interceptar
+      const target = event.target as HTMLElement
+      const isInTextField = (target instanceof HTMLInputElement && target.type !== 'hidden') || target instanceof HTMLTextAreaElement
+      if (isInTextField) return
 
       if (event.key === 'Enter') {
         event.preventDefault()
@@ -444,7 +418,6 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
       if (event.ctrlKey || event.metaKey || event.altKey) return
 
       scannerBufferRef.current += event.key
-      setBarcodeInput(scannerBufferRef.current)
 
       if (scannerResetTimerRef.current) {
         window.clearTimeout(scannerResetTimerRef.current)
@@ -462,15 +435,10 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
         window.clearTimeout(scannerResetTimerRef.current)
       }
     }
-  }, [isOpen, isScannerMode])
+  }, [isOpen])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!customerId) {
-      showToast('Selecciona un cliente', 'error')
-      return
-    }
 
     if (lineItems.length === 0) {
       showToast('Agrega al menos un producto a la venta', 'error')
@@ -501,7 +469,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
       items: totalItems,
       status: 'delivered' as const,
       orderNumber: `ORD-${Date.now()}`,
-      customerName: state.customers.find(c => c.id === customerId)?.name || '',
+      customerName: state.customers.find(c => c.id === customerId)?.name || 'Consumidor Final',
       cashierName: user?.name || 'Cajero no disponible',
       date: new Date(),
       lines: lineItems.map((line) => ({
@@ -561,7 +529,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
             <div className="xl:col-span-2 space-y-4">
               <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
-                <label className="block text-sm font-semibold mb-2">Cliente</label>
+                <label className="block text-sm font-semibold mb-2">Cliente <span className="font-normal text-muted-foreground">(opcional)</span></label>
                 <div className="relative">
                   <input
                     type="text"
@@ -575,7 +543,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
                     }}
                     onFocus={() => setIsCustomerSuggestionsOpen(true)}
                     className="w-full px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary bg-background"
-                    placeholder="Escribe el nombre del cliente"
+                    placeholder="Buscar cliente... (vacío = Consumidor Final)"
                   />
 
                   {isCustomerSuggestionsOpen && customerSearchTerm.trim() && filteredCustomers.length > 0 && (
@@ -634,36 +602,7 @@ export function CreateOrderModal({ isOpen, onClose, onCreateOrder }: CreateOrder
                       )}
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-semibold mb-1">Escaneo de código de barras</label>
-                    <div className="flex gap-2">
-                      <input
-                        ref={barcodeInputRef}
-                        type="text"
-                        value={barcodeInput}
-                        onChange={(e) => setBarcodeInput(e.target.value)}
-                        onFocus={() => setIsScannerMode(true)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            handleBarcodeAdd()
-                          }
-                        }}
-                        className="flex-1 px-3 py-2.5 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
-                        placeholder="Escanear SKU y Enter"
-                      />
-                      <button
-                        type="button"
-                        onClick={armUsbScanner}
-                        className="px-3 py-2.5 rounded-xl border border-border hover:bg-muted transition font-medium"
-                      >
-                        Escanear
-                      </button>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {isScannerMode ? 'Modo scanner activo: lee el codigo con el lector USB.' : 'Haz clic en Escanear para capturar una lectura desde el scanner USB.'}
-                    </p>
-                  </div>
+
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">

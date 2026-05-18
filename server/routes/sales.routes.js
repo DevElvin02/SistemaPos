@@ -94,6 +94,7 @@ async function getSaleById(connection, id) {
     `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name, c.email AS customer_email, u.name AS cashier_name,
             sp.method AS payment_method, sp.amount_received, sp.amount_change,
             s.sale_date, s.document_type, s.subtotal, s.discount_percent, s.discount_amount, s.tax, s.total, s.status,
+            s.invoice_email_sent_at,
             COALESCE(SUM(si.quantity), 0) AS items
      FROM sales s
      LEFT JOIN customers c ON c.id = s.customer_id
@@ -101,7 +102,7 @@ async function getSaleById(connection, id) {
      LEFT JOIN sale_payments sp ON sp.sale_id = s.id
      LEFT JOIN sale_items si ON si.sale_id = s.id
      WHERE s.id = ?
-     GROUP BY s.id, s.sale_number, s.customer_id, c.name, c.email, u.name, sp.method, sp.amount_received, sp.amount_change, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
+     GROUP BY s.id, s.sale_number, s.customer_id, c.name, c.email, u.name, sp.method, sp.amount_received, sp.amount_change, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status, s.invoice_email_sent_at
      LIMIT 1`,
     [id]
   );
@@ -178,13 +179,14 @@ async function listSales(connection, limit = 200) {
     `SELECT s.id, s.sale_number, s.customer_id, c.name AS customer_name, c.email AS customer_email, u.name AS cashier_name,
             sp.method AS payment_method, sp.amount_received, sp.amount_change,
             s.sale_date, s.document_type, s.subtotal, s.discount_percent, s.discount_amount, s.tax, s.total, s.status,
+            s.invoice_email_sent_at,
             COALESCE(SUM(si.quantity), 0) AS items
      FROM sales s
      LEFT JOIN customers c ON c.id = s.customer_id
      LEFT JOIN users u ON u.id = s.user_id
      LEFT JOIN sale_payments sp ON sp.sale_id = s.id
      LEFT JOIN sale_items si ON si.sale_id = s.id
-     GROUP BY s.id, s.sale_number, s.customer_id, c.name, c.email, u.name, sp.method, sp.amount_received, sp.amount_change, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status
+     GROUP BY s.id, s.sale_number, s.customer_id, c.name, c.email, u.name, sp.method, sp.amount_received, sp.amount_change, s.sale_date, s.document_type, s.subtotal, s.tax, s.total, s.status, s.invoice_email_sent_at
      ORDER BY s.id DESC
      LIMIT ?`,
     [limit]
@@ -246,6 +248,13 @@ router.post('/:id/send-invoice-email', async (req, res, next) => {
       return res.status(400).json({ ok: false, message: 'No se puede enviar la factura de una venta revertida' });
     }
 
+    if (sale.invoice_email_sent_at) {
+      const sentDate = new Date(sale.invoice_email_sent_at).toLocaleDateString('es-ES', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+      });
+      return res.status(409).json({ ok: false, message: `La factura electrónica ya fue enviada el ${sentDate}` });
+    }
+
     const customerEmail = String(sale.customer_email || '').trim();
     if (!customerEmail) {
       return res.status(400).json({ ok: false, message: 'El cliente no tiene un correo registrado' });
@@ -280,6 +289,8 @@ router.post('/:id/send-invoice-email', async (req, res, next) => {
         country: String(settings.country || ''),
       },
     });
+
+    await connection.query('UPDATE sales SET invoice_email_sent_at = NOW() WHERE id = ?', [sale.id]);
 
     return res.json({
       ok: true,

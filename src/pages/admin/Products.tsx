@@ -190,6 +190,8 @@ export default function Products() {
   const { hasPermission, user } = useAuth();
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const scannerGlobalBufferRef = useRef('');
+  const scannerGlobalTimerRef = useRef<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStockFilter, setSelectedStockFilter] = useState('all');
@@ -199,7 +201,6 @@ export default function Products() {
   const [formData, setFormData] = useState<ProductFormData>(buildFormData());
   const [isSkuManual, setIsSkuManual] = useState(false);
   const [isBarcodeManual, setIsBarcodeManual] = useState(false);
-  const [isBarcodeScannerMode, setIsBarcodeScannerMode] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const canCreate = hasPermission('products.create');
@@ -277,7 +278,6 @@ export default function Products() {
     setFormData(buildFormData());
     setIsSkuManual(false);
     setIsBarcodeManual(false);
-    setIsBarcodeScannerMode(false);
     setIsProductModalOpen(true);
   };
 
@@ -292,7 +292,6 @@ export default function Products() {
     setFormData(buildFormData(product));
     setIsSkuManual(true);
     setIsBarcodeManual(true);
-    setIsBarcodeScannerMode(false);
     setIsProductModalOpen(true);
   };
 
@@ -328,7 +327,6 @@ export default function Products() {
 
   const handleGenerateBarcode = () => {
     setIsBarcodeManual(false);
-    setIsBarcodeScannerMode(false);
     setFormData((prev) => ({
       ...prev,
       barcode: generateUniqueBarcode(prev.name, prev.sku, state.products, selectedProduct?.id ?? null),
@@ -362,26 +360,136 @@ export default function Products() {
   const finalizeScannedBarcode = () => {
     const normalizedBarcode = formData.barcode.trim();
     if (!normalizedBarcode) return;
-
     setIsBarcodeManual(true);
-    setIsBarcodeScannerMode(false);
     setFormData((prev) => {
       if (prev.barcode === normalizedBarcode) return prev;
       return { ...prev, barcode: normalizedBarcode };
     });
     playScannerSuccessTone();
-    showToast('Codigo capturado desde el scanner', 'success');
+    showToast('Codigo capturado', 'success');
   };
 
-  const handleArmBarcodeScanner = () => {
-    setIsBarcodeScannerMode(true);
-    setIsBarcodeManual(true);
-    setFormData((prev) => ({ ...prev, barcode: '' }));
-    window.setTimeout(() => {
-      barcodeInputRef.current?.focus();
-      barcodeInputRef.current?.select();
-    }, 0);
-  };
+  // Escaner automatico: acumula caracteres del lector USB y al Enter vuelca SOLO al campo barcode.
+  // Los caracteres del escaner (< 30 ms entre si) se interceptan aunque haya otro campo enfocado;
+  // si el primer caracter llego a otro campo se restaura ese campo al finalizar el escaneo.
+  useEffect(() => {
+    if (!isProductModalOpen) return;
+
+    // Estado local del ciclo de escaneo (no necesita ser React state)
+    const SCANNER_MS = 30; // umbral de velocidad: < 30 ms entre teclas = escaner USB
+    let lastKeyTime = 0;
+    let scannerActive = false;
+    let firstChar = '';
+    let contaminatedInput: HTMLInputElement | HTMLTextAreaElement | null = null;
+    let contaminatedValue = '';
+
+    const resetScanner = () => {
+      scannerGlobalBufferRef.current = '';
+      if (scannerGlobalTimerRef.current) {
+        window.clearTimeout(scannerGlobalTimerRef.current);
+        scannerGlobalTimerRef.current = null;
+      }
+      lastKeyTime = 0;
+      scannerActive = false;
+      firstChar = '';
+      contaminatedInput = null;
+      contaminatedValue = '';
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      // El campo barcode maneja su propio input normalmente
+      if (target === barcodeInputRef.current) return;
+
+      const isInTextField =
+        (target instanceof HTMLInputElement && target.type !== 'hidden') ||
+        target instanceof HTMLTextAreaElement;
+
+      const now = Date.now();
+      const isFast = lastKeyTime > 0 && (now - lastKeyTime) < SCANNER_MS;
+
+      if (event.key === 'Enter') {
+        const code = scannerGlobalBufferRef.current.trim();
+        if (scannerActive && code.length >= 3) {
+          event.preventDefault();
+          // Restaurar el campo que recibio el primer caracter del escaneo
+          if (contaminatedInput) {
+            const nativeSetter = Object.getOwnPropertyDescriptor(
+              window.HTMLInputElement.prototype,
+              'value'
+            )?.set;
+            if (nativeSetter) {
+              nativeSetter.call(contaminatedInput, contaminatedValue);
+              contaminatedInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+          }
+          const savedCode = code;
+          resetScanner();
+          setIsBarcodeManual(true);
+          setFormData((prev) => ({ ...prev, barcode: savedCode }));
+          playScannerSuccessTone();
+          showToast('Codigo capturado', 'success');
+        } else {
+          resetScanner();
+        }
+        return;
+      }
+
+      if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) {
+        if (!scannerActive) lastKeyTime = 0;
+        return;
+      }
+
+      // Si estabamos en modo escaner pero llego una tecla lenta → fue falso positivo, salir
+      if (scannerActive && !isFast) {
+        resetScanner();
+        // El caracter actual se procesa como nuevo primer candidato (ver ramas de abajo)
+      }
+
+      if (isInTextField) {
+        if (scannerActive) {
+          // Secuencia confirmada: evitar que el caracter entre en el campo enfocado
+          event.preventDefault();
+          scannerGlobalBufferRef.current += event.key;
+          lastKeyTime = now;
+        } else if (isFast && firstChar) {
+          // Segundo caracter rapido: confirmar que es escaner, capturar ambos
+          event.preventDefault();
+          scannerActive = true;
+          scannerGlobalBufferRef.current = firstChar + event.key;
+          lastKeyTime = now;
+        } else {
+          // Primer caracter (o tipeo normal a velocidad humana): dejar pasar
+          // pero guardar contexto por si el siguiente confirma que es escaner
+          firstChar = event.key;
+          contaminatedInput = target as HTMLInputElement | HTMLTextAreaElement;
+          contaminatedValue = (target as HTMLInputElement | HTMLTextAreaElement).value;
+          lastKeyTime = now;
+        }
+      } else {
+        // Fuera de campos de texto: siempre capturar
+        if (!scannerActive && isFast && firstChar) {
+          scannerActive = true;
+          scannerGlobalBufferRef.current = firstChar + event.key;
+        } else {
+          scannerGlobalBufferRef.current += event.key;
+          if (!scannerActive && scannerGlobalBufferRef.current.length >= 2) {
+            scannerActive = true;
+          }
+        }
+        lastKeyTime = now;
+      }
+
+      if (scannerGlobalTimerRef.current) window.clearTimeout(scannerGlobalTimerRef.current);
+      scannerGlobalTimerRef.current = window.setTimeout(resetScanner, 150);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      if (scannerGlobalTimerRef.current) window.clearTimeout(scannerGlobalTimerRef.current);
+    };
+  }, [isProductModalOpen]);
 
   const handleSaveProduct = async () => {
     if ((formMode === 'create' && !canCreate) || (formMode === 'edit' && !canEdit)) {
@@ -827,7 +935,6 @@ export default function Products() {
                           ref={barcodeInputRef}
                           type="text"
                           value={formData.barcode}
-                          onFocus={() => setIsBarcodeScannerMode(true)}
                           onChange={(e) => {
                             setIsBarcodeManual(true);
                             setFormData((prev) => ({ ...prev, barcode: e.target.value }));
@@ -838,12 +945,8 @@ export default function Products() {
                               finalizeScannedBarcode();
                             }
                           }}
-                          onBlur={() => {
-                            if (isBarcodeScannerMode) {
-                              finalizeScannedBarcode();
-                            }
-                          }}
                           className="w-full px-3 py-2.5 border border-border rounded-xl bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                          placeholder="Escanea o escribe el codigo"
                         />
                         <button
                           type="button"
@@ -853,15 +956,8 @@ export default function Products() {
                         >
                           Auto
                         </button>
-                        <button
-                          type="button"
-                          onClick={handleArmBarcodeScanner}
-                          className="px-3 py-2.5 rounded-xl border border-border hover:bg-muted transition whitespace-nowrap"
-                        >
-                          Escanear
-                        </button>
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground">{isBarcodeScannerMode ? 'Modo scanner activo: al detectar Enter se confirmara el codigo y sonara una alerta breve.' : 'Puedes escribirlo manualmente, generarlo con Auto o usar Escanear con lector USB.'}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Escanea con el lector USB en cualquier momento (sin hacer clic) o escríbelo manualmente.</p>
                     </div>
 
                     <div className="md:col-span-2">

@@ -258,6 +258,14 @@ export default function Orders() {
       return;
     }
 
+    if (order.invoiceEmailSentAt) {
+      const sentDate = order.invoiceEmailSentAt.toLocaleDateString('es-ES', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+      });
+      showToast(`La factura electrónica ya fue enviada el ${sentDate}`, 'error');
+      return;
+    }
+
     const customer = state.customers.find((item) => item.id === order.customerId);
     if (!customer?.email?.trim()) {
       showToast('El cliente no tiene un correo registrado', 'error');

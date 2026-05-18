@@ -288,6 +288,7 @@ export async function bootstrapSchema() {
     await modifyColumnIfExists('sales', 'status', "status VARCHAR(20) NOT NULL DEFAULT 'delivered'");
     await addColumnIfMissing('sales', 'discount_percent', 'discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER subtotal');
     await addColumnIfMissing('sales', 'discount_amount', 'discount_amount DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER discount_percent');
+    await addColumnIfMissing('sales', 'invoice_email_sent_at', 'invoice_email_sent_at DATETIME NULL DEFAULT NULL');
   }
 
   if (await tableExists('sale_items')) {

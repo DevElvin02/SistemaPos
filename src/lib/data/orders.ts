@@ -122,6 +122,7 @@ export interface Order {
   items: number;
   lines?: OrderLine[];
   date: Date;
+  invoiceEmailSentAt?: Date | null;
 }
 
 export const orders: Order[] = [

@@ -294,7 +294,7 @@ export const generateInvoiceHTML = (invoiceData: InvoiceData): string => {
           <div class="detail-section">
             <h3>Cliente</h3>
             <p><strong>${customerName}</strong></p>
-            <p>${customerEmail}</p>
+            ${customerEmail ? `<p>${customerEmail}</p>` : ''}
           </div>
           <div class="detail-section">
             <h3>Condiciones de Pago</h3>

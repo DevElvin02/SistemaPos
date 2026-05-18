@@ -140,6 +140,7 @@ function mapOrder(row: Record<string, unknown>): Order {
     items: Number(row.items ?? 0),
     lines: parseOrderLines(row.line_items ?? row.lines),
     date: row.sale_date ? new Date(String(row.sale_date)) : new Date(),
+    invoiceEmailSentAt: row.invoice_email_sent_at ? new Date(String(row.invoice_email_sent_at)) : null,
   };
 }
 
