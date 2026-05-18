@@ -74,10 +74,11 @@ router.post('/', async (req, res, next) => {
         `UPDATE products SET name=?, category_id=?, cost_price=?, sale_price=?, status=?, updated_at=NOW() WHERE id=?`,
         [name, categoryId, cost_price ?? 0, sale_price, status ?? 'active', productId]
       );
-      // Sumar cantidad al inventario
+      // Sumar cantidad al inventario (crea el registro si no existe)
       await conn.query(
-        `UPDATE inventory SET quantity = quantity + ?, min_level = ? WHERE product_id = ?`,
-        [stock ?? 0, min_stock ?? 0, productId]
+        `INSERT INTO inventory (product_id, quantity, min_level) VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity), min_level = VALUES(min_level)`,
+        [productId, stock ?? 0, min_stock ?? 0]
       );
     } else {
       // No existe: crear producto nuevo

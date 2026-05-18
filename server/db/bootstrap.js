@@ -291,6 +291,19 @@ export async function bootstrapSchema() {
     await addColumnIfMissing('sales', 'invoice_email_sent_at', 'invoice_email_sent_at DATETIME NULL DEFAULT NULL');
   }
 
+  // Sincronizar productos sin registro de inventario
+  if (await tableExists('inventory') && await tableExists('products')) {
+    try {
+      await dbPool.query(
+        `INSERT IGNORE INTO inventory (product_id, quantity, min_level)
+         SELECT id, 0, 0 FROM products WHERE id NOT IN (SELECT product_id FROM inventory)`
+      );
+    } catch (error) {
+      if (!isPermissionError(error)) throw error;
+      console.warn('[DB bootstrap] Sin permisos para sincronizar inventario. Se omite.');
+    }
+  }
+
   if (await tableExists('sale_items')) {
     await addColumnIfMissing('sale_items', 'discount_percent', 'discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER unit_price');
     await addColumnIfMissing('sale_items', 'discount_amount', 'discount_amount DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER discount_percent');
